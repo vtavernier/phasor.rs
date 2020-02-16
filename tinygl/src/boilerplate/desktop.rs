@@ -1,0 +1,53 @@
+pub fn run_boilerplate<'a>(mut demo: impl super::Demo<'a> + 'static) {
+    use glutin::event::{Event, WindowEvent};
+    use glutin::event_loop::{ControlFlow, EventLoop};
+    use glutin::window::WindowBuilder;
+    use glutin::ContextBuilder;
+
+    let el = EventLoop::new();
+
+    let wb = WindowBuilder::new()
+        .with_title(demo.title())
+        .with_inner_size(glutin::dpi::LogicalSize::new(768.0, 768.0));
+
+    let windowed_context = ContextBuilder::new().build_windowed(wb, &el).unwrap();
+
+    let (gl, windowed_context) = unsafe {
+        let current = windowed_context
+            .make_current()
+            .expect("failed to make window context current");
+        (
+            crate::Context::from_loader_function(|s| current.get_proc_address(s) as *const _),
+            current,
+        )
+    };
+
+    // Initialize demo
+    demo.init(&gl);
+
+    el.run(move |event, _, control_flow| {
+        *control_flow = ControlFlow::Wait;
+
+        match event {
+            Event::LoopDestroyed => return,
+            Event::WindowEvent { event, .. } => match event {
+                WindowEvent::Resized(physical_size) => windowed_context.resize(physical_size),
+                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                _ => (),
+            },
+            Event::RedrawRequested(_) => {
+                // Render demo
+                demo.render(&gl);
+                windowed_context.swap_buffers().unwrap();
+            }
+            _ => (),
+        }
+    });
+}
+
+#[macro_export]
+macro_rules! impl_desktop_demo {
+    ($e:ty) => {
+        ::tinygl::boilerplate::desktop::run_boilerplate(<$e>::default())
+    };
+}

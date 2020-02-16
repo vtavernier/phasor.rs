@@ -1,0 +1,10 @@
+[package]
+name = "tinygl-compiler"
+version = "0.1.0"
+authors = ["Vincent Tavernier <vincent.tavernier@inria.fr>"]
+edition = "2018"
+
+[dependencies]
+shaderc = "0.6.1"
+spirv-reflect = "0.2.3"
+heck = "0.3.1"

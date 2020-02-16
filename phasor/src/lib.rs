@@ -1,0 +1,58 @@
+use tinygl::prelude::*;
+
+#[cfg(target_arch = "wasm32")]
+mod web;
+
+pub mod shaders {
+    // Compiled by tinygl-compiler
+    include!(concat!(env!("OUT_DIR"), "/shaders.rs"));
+}
+
+#[derive(Default)]
+pub struct Demo {}
+
+impl<'a> tinygl::boilerplate::Demo<'a> for Demo {
+    fn init(&mut self, gl: &tinygl::Context) {
+        // Build and bind an empty VAO
+        let _vao = unsafe {
+            let vao_name = gl.create_vertex_array().unwrap();
+            gl.bind_vertex_array(Some(vao_name));
+            vao_name
+        };
+
+        // Build the main program
+        let vert_shader = shaders::QuadVertShader::build(&gl).unwrap();
+        let frag_shader = shaders::DisplayFragShader::build(&gl).unwrap();
+
+        let prog = unsafe {
+            let program_name = gl.create_program().unwrap();
+
+            gl.attach_shader(program_name, vert_shader);
+            gl.attach_shader(program_name, frag_shader);
+
+            gl.link_program(program_name);
+
+            assert!(gl.get_program_link_status(program_name));
+
+            program_name
+        };
+
+        // Use the main program
+        unsafe { gl.use_program(Some(prog)) };
+    }
+
+    fn render(&mut self, gl: &tinygl::Context) {
+        unsafe {
+            // Clear framebuffer
+            gl.clear_color(1.0, 0.0, 1.0, 1.0);
+            gl.clear(tinygl::gl::COLOR_BUFFER_BIT);
+
+            // Draw current program
+            gl.draw_arrays(tinygl::gl::TRIANGLES, 0, 3);
+        }
+    }
+
+    fn title(&self) -> &'a str {
+        "phasor.rs"
+    }
+}

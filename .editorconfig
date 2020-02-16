@@ -1,0 +1,7 @@
+root = true
+
+[*]
+indent_style = space
+
+[*.{vert,comp,frag}]
+indent_size = 4

@@ -1,0 +1,34 @@
+[package]
+name = "phasor"
+version = "0.1.0"
+authors = ["Vincent Tavernier <vince.tavernier@gmail.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["console_error_panic_hook"]
+
+[dependencies]
+cgmath = "0.17.0"
+tinygl = { path = "../tinygl" }
+log = "0.4.8"
+
+[target.wasm32-unknown-unknown.dependencies]
+wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }
+web-sys = { version = "0.3", features = ["HtmlElement"] }
+console_log = "0.1.2"
+
+console_error_panic_hook = { version = "0.1.1", optional = true }
+wee_alloc = { version = "0.4.2", optional = true }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.2"
+
+[build-dependencies]
+tinygl-compiler = { path = "../tinygl-compiler" }
+
+[profile.release]
+# Tell `rustc` to optimize for small code size.
+opt-level = "s"

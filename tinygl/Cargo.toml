@@ -1,0 +1,21 @@
+[package]
+name = "tinygl"
+version = "0.1.0"
+authors = ["Vincent Tavernier <vincent.tavernier@inria.fr>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+glow = "0.4.0"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+glutin = "0.23.0"
+
+[target.wasm32-unknown-unknown.dependencies]
+wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }
+web-sys = { version = "0.3", features = ["Node", "Document", "HtmlElement"] }
+
+[build-dependencies]
+gl_generator = "0.14.0"
