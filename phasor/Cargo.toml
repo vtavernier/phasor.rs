@@ -28,7 +28,3 @@ wasm-bindgen-test = "0.2"
 
 [build-dependencies]
 tinygl-compiler = { path = "../tinygl-compiler" }
-
-[profile.release]
-# Tell `rustc` to optimize for small code size.
-opt-level = "s"
