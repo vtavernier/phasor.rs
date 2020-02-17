@@ -6,5 +6,5 @@ edition = "2018"
 
 [dependencies]
 shaderc = "0.6.1"
-spirv-reflect = "0.2.3"
 heck = "0.3.1"
+spirv_cross = { version = "0.17.1", features = ["glsl"] }

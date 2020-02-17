@@ -24,8 +24,8 @@ pub fn run<'a, T: super::Demo<'a> + Default>(
 #[macro_export]
 macro_rules! impl_web_demo {
     ($e:ty) => {
-        use wasm_bindgen::{prelude::*, JsCast};
         use tinygl::boilerplate::Demo;
+        use wasm_bindgen::{prelude::*, JsCast};
 
         #[wasm_bindgen]
         pub struct State {

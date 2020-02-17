@@ -1,4 +1,6 @@
-tinygl_location(0) out vec2 uv;
+#version 460
+
+layout(location = 0) out vec2 uv;
 
 void main() {
     uv = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
