@@ -44,10 +44,3 @@ pub fn run_boilerplate<'a>(mut demo: impl super::Demo<'a> + 'static) {
         }
     });
 }
-
-#[macro_export]
-macro_rules! impl_desktop_demo {
-    ($e:ty) => {
-        ::tinygl::boilerplate::desktop::run_boilerplate(<$e>::default())
-    };
-}
