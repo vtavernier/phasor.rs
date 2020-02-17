@@ -6,5 +6,5 @@ layout(location = 0) out vec4 fragColor;
 #include "test.glsl"
 
 void main() {
-    fragColor = vec4(vec3(length(uv)), 1.0 - uAlpha);
+    fragColor = vec4(length(uv), q(), 1.0 - uAlpha);
 }
