@@ -203,34 +203,86 @@ impl Compiler {
 
         writeln!(wr, "/// {} Rust wrapper", shader)?;
         writeln!(wr, "pub struct {} {{}}", struct_name)?;
-        writeln!(wr, "pub trait {} {{", uniform_trait_name)?;
+
+        // Write struct for holding uniform locations
+        writeln!(wr, "#[derive(Default)]")?;
+        writeln!(wr, "pub struct {} {{", uniform_trait_name)?;
+
+        for uniform in uniforms {
+            let uniform_location_name = (uniform.name.clone() + "_location").to_snake_case();
+
+            writeln!(wr, "    {name}: Option<<::tinygl::glow::Context as ::tinygl::glow::HasContext>::UniformLocation>,",
+                name = uniform_location_name)?;
+        }
+        writeln!(wr, "}}")?;
+
+        writeln!(wr, "impl {} {{", uniform_trait_name)?;
+        // Write constructor
+        writeln!(
+            wr,
+            "    pub fn new({prefix}gl: &::tinygl::Context, {prefix}program: <::tinygl::glow::Context as ::tinygl::glow::HasContext>::Program) -> Self {{",
+            prefix = if let TargetType::Glsl(_) = self.output_type {
+                ""
+            } else {
+                "_"
+            })?;
+        writeln!(
+            wr,
+            "        Self {{")?;
+
+        for uniform in uniforms {
+            let uniform_location_name = (uniform.name.clone() + "_location").to_snake_case();
+
+            if let TargetType::Glsl(_) = self.output_type {
+                // Source shader: find uniform locations from variable names
+                writeln!(wr, "            {name}: unsafe {{ gl.get_uniform_location(program, \"{uniform_name}\") }},",
+                    name = uniform_location_name,
+                    uniform_name = uniform.name)?;
+            } else {
+                // Binary shader: assume locations form reflection on SPIR-V
+                writeln!(wr, "            {name}: Some({location}),",
+                    name = uniform_location_name,
+                    location = uniform.location)?;
+            }
+        }
+
+        writeln!(
+            wr,
+            "        }}")?;
+        writeln!(wr, "    }}")?;
+
+        // Write setter methods
         for uniform in uniforms {
             let ty = uniform.ty.unwrap();
+            let uniform_location_name = (uniform.name.clone() + "_location").to_snake_case();
 
             writeln!(
                 wr,
-                "    fn set_{uniform_sc_name}(gl: &::tinygl::Context, value: {type_name}) {{",
+                "    pub fn set_{uniform_sc_name}(&self, gl: &::tinygl::Context, value: {type_name}) {{",
                 uniform_sc_name = uniform.name.to_snake_case(),
                 type_name = ty.cgmath_name()
             )?;
 
             writeln!(wr, "        use ::tinygl::HasContext;")?;
 
-            writeln!(wr, "        unsafe {{ gl.uniform_{components}_{rstype}_slice(Some(&{location}), {what}) }};",
+            writeln!(wr, "        unsafe {{ gl.uniform_{components}_{rstype}_slice(self.{location}.as_ref(), {what}) }};",
                 components = ty.components(),
                 rstype = ty.rstype(),
-                location = uniform.location,
+                location = uniform_location_name,
                 what = ty.glow_value("value"))?;
 
             writeln!(wr, "    }}")?;
         }
         writeln!(wr, "}}")?;
-        writeln!(wr, "impl {} for {} {{}}", uniform_trait_name, struct_name)?;
+
+        // A wrapped shader implements ShaderCommon
         writeln!(wr, "impl ::tinygl::ShaderCommon for {} {{", struct_name)?;
         writeln!(wr, "    fn get_kind() -> u32 {{")?;
         writeln!(wr, "        ::tinygl::gl::{}", kind.constant_name)?;
         writeln!(wr, "    }}")?;
         writeln!(wr, "}}")?;
+
+        // Implement the right shader trait for the given output type
         if let TargetType::Glsl(_) = self.output_type {
             writeln!(
                 wr,
@@ -252,7 +304,6 @@ impl Compiler {
             writeln!(wr, "    }}")?;
             writeln!(wr, "}}")?;
         }
-        writeln!(wr, "")?;
 
         Ok(rs_file_name)
     }

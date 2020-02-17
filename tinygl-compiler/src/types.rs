@@ -150,7 +150,7 @@ impl GenericType {
         match self {
             Self::Atom(_) => format!("&[{}]", name),
             Self::Vector(inner_type) => format!(
-                "std::convert::AsRef::<[{base_ty}; {components}]>::as_ref(&{})",
+                "::std::convert::AsRef::<[{base_ty}; {components}]>::as_ref(&{})",
                 name,
                 components = self.components(),
                 base_ty = inner_type.rstype()

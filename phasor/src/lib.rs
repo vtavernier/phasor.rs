@@ -9,7 +9,9 @@ pub mod shaders {
 }
 
 #[derive(Default)]
-pub struct Demo {}
+pub struct Demo {
+    prog_uniforms: shaders::DisplayFragUniforms,
+}
 
 impl<'a> tinygl::boilerplate::Demo<'a> for Demo {
     fn init(&mut self, gl: &tinygl::Context) {
@@ -43,6 +45,8 @@ impl<'a> tinygl::boilerplate::Demo<'a> for Demo {
             program_name
         };
 
+        self.prog_uniforms = shaders::DisplayFragUniforms::new(gl, prog);
+
         // Use the main program
         unsafe { gl.use_program(Some(prog)) };
     }
@@ -54,8 +58,7 @@ impl<'a> tinygl::boilerplate::Demo<'a> for Demo {
             gl.clear(tinygl::gl::COLOR_BUFFER_BIT);
 
             // Set uniforms
-            use shaders::DisplayFragUniforms;
-            shaders::DisplayFragShader::set_u_stuff(&gl, cgmath::vec3(1, 1, 1));
+            self.prog_uniforms.set_u_stuff(&gl, cgmath::vec3(1, 1, 1));
 
             // Draw current program
             gl.draw_arrays(tinygl::gl::TRIANGLES, 0, 3);

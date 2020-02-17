@@ -141,9 +141,12 @@ pub fn find_uniforms(module: &rspirv::mr::Module) -> Vec<FoundUniform> {
         }
     }
 
-    names
+    let mut v = names
         .drain()
         .map(|(_k, v)| v)
         .filter(|v| v.ty.is_some())
-        .collect::<Vec<_>>()
+        .collect::<Vec<_>>();
+
+    v.sort_by_key(|item| item.location);
+    v
 }
