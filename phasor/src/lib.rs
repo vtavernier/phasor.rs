@@ -34,6 +34,12 @@ impl<'a> tinygl::boilerplate::Demo<'a> for Demo {
 
             assert!(gl.get_program_link_status(program_name));
 
+            gl.detach_shader(program_name, vert_shader);
+            gl.detach_shader(program_name, frag_shader);
+
+            gl.delete_shader(vert_shader);
+            gl.delete_shader(frag_shader);
+
             program_name
         };
 
