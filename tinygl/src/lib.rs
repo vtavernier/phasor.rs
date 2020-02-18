@@ -16,6 +16,9 @@ pub use glow;
 pub mod prelude {
     pub use super::HasContext;
 
+    pub use super::ShaderCommon;
+    pub use super::ProgramCommon;
+
     #[cfg(not(target_arch = "wasm32"))]
     pub use super::BinaryShader;
     pub use super::SourceShader;

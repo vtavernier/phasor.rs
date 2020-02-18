@@ -9,6 +9,7 @@ pub enum Error {
     InvalidTargetType(TargetType),
     InvalidSkipSpirV,
     SpirVCrossError(spirv_cross::ErrorCode),
+    UnwrappedShader(String),
 }
 
 impl fmt::Display for Error {
@@ -26,6 +27,7 @@ impl fmt::Display for Error {
                 "cannot skip SPIR-V generation when the target is explicitely SPIR-V"
             ),
             Self::SpirVCrossError(error) => write!(f, "spirv_cross error: {:?}", error),
+            Self::UnwrappedShader(name) => write!(f, "shader {} was not wrapped before building the program, call Compiler::wrap_shader first", name)
         }
     }
 }

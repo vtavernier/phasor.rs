@@ -119,6 +119,7 @@ impl GenericType {
         }
     }
 
+    #[allow(dead_code)]
     pub fn named<'a>(&'a self, name: &'a str) -> NamedGenericType<'a> {
         NamedGenericType { name, gt: self }
     }

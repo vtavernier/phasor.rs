@@ -1,6 +1,10 @@
-pub fn run<'a, T: super::Demo<'a> + Default>(
+pub fn run<'a, T>(
     canvas: web_sys::HtmlCanvasElement,
-) -> Result<(crate::Context, T), wasm_bindgen::JsValue> {
+) -> Result<(crate::Context, T, T::State), wasm_bindgen::JsValue>
+where
+    T: super::Demo<'a> + Default + 'static,
+    T::Error: std::fmt::Debug,
+{
     use wasm_bindgen::JsCast;
 
     // Create a context from a WebGL2 context on wasm32 targets
@@ -15,10 +19,10 @@ pub fn run<'a, T: super::Demo<'a> + Default>(
 
     // Initialize demo
     let mut demo = T::default();
-    demo.init(&gl);
+    let state = demo.init(&gl).expect("failed to initialize demo");
 
     // Create state with GL context and in-view demo object
-    Ok((gl, demo))
+    Ok((gl, demo, state))
 }
 
 #[macro_export]
@@ -28,24 +32,29 @@ macro_rules! impl_web_demo {
         use wasm_bindgen::{prelude::*, JsCast};
 
         #[wasm_bindgen]
-        pub struct State {
+        pub struct WebState {
             gl: tinygl::Context,
             demo: $e,
+            state: <$e>::State,
         }
 
         #[wasm_bindgen]
-        pub fn render(mut state: State) {
-            state.demo.render(&state.gl);
+        pub fn render(mut state: WebState) {
+            state.demo.render(&state.gl, &mut state.state);
         }
 
         #[wasm_bindgen]
-        pub fn init(canvas: JsValue) -> Result<State, JsValue> {
+        pub fn init(canvas: JsValue) -> Result<WebState, JsValue> {
             // Cast object into canvas object
             let canvas = canvas
                 .dyn_into::<web_sys::HtmlCanvasElement>()
                 .expect("canvas element is required");
 
-            tinygl::boilerplate::web::run(canvas).map(|(gl, demo)| State { gl, demo })
+            tinygl::boilerplate::web::run(canvas).map(|(gl, demo, state)| WebState {
+                gl,
+                demo,
+                state,
+            })
         }
     };
 }

@@ -1,10 +1,19 @@
 use crate::types::*;
+use heck::SnakeCase;
 
 #[derive(Debug, Default)]
 pub struct FoundUniform {
     pub name: String,
     pub location: u32,
     pub ty: Option<GenericType>,
+
+    location_name: String,
+}
+
+impl FoundUniform {
+    pub fn location_name(&self) -> &str {
+        &self.location_name
+    }
 }
 
 pub fn find_uniforms(module: &rspirv::mr::Module) -> Vec<FoundUniform> {
@@ -132,6 +141,7 @@ pub fn find_uniforms(module: &rspirv::mr::Module) -> Vec<FoundUniform> {
 
                         // Assign type using pointer table
                         v.ty = Some(types[&type_pointers[&tp]]);
+                        v.location_name = (v.name.clone() + "_location").to_snake_case();
                     } else {
                         panic!("failed to get result_id");
                     }

@@ -1,4 +1,9 @@
-pub fn run_boilerplate<'a>(mut demo: impl super::Demo<'a> + 'static) {
+pub fn run_boilerplate<'a, T>(mut demo: T)
+where
+    T: super::Demo<'a> + 'static,
+    T::Error: std::fmt::Debug,
+    T::State: 'static
+{
     use glutin::event::{Event, WindowEvent};
     use glutin::event_loop::{ControlFlow, EventLoop};
     use glutin::window::WindowBuilder;
@@ -23,7 +28,7 @@ pub fn run_boilerplate<'a>(mut demo: impl super::Demo<'a> + 'static) {
     };
 
     // Initialize demo
-    demo.init(&gl);
+    let mut state = demo.init(&gl).expect("failed to initialize demo");
 
     el.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -37,7 +42,7 @@ pub fn run_boilerplate<'a>(mut demo: impl super::Demo<'a> + 'static) {
             },
             Event::RedrawRequested(_) => {
                 // Render demo
-                demo.render(&gl);
+                demo.render(&gl, &mut state);
                 windowed_context.swap_buffers().unwrap();
             }
             _ => (),

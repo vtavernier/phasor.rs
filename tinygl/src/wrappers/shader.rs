@@ -2,7 +2,8 @@ use crate::context::{Context, HasContext};
 
 /// Common traits to binary and source shaders
 pub trait ShaderCommon {
-    fn get_kind() -> u32;
+    fn kind() -> u32;
+    fn name(&self) -> <glow::Context as HasContext>::Shader;
 }
 
 /// Build a shader name and try to compile it using the given callback
@@ -36,7 +37,7 @@ pub trait BinaryShader<'a>: ShaderCommon {
 
     fn build(gl: &Context) -> Result<<glow::Context as HasContext>::Shader, String> {
         unsafe {
-            make_shader(gl, Self::get_kind(), |shader_name| {
+            make_shader(gl, Self::kind(), |shader_name| {
                 use crate::gl;
 
                 // Load the binary
@@ -59,7 +60,7 @@ pub trait SourceShader<'a>: ShaderCommon {
 
     fn build(gl: &Context) -> Result<<glow::Context as HasContext>::Shader, String> {
         unsafe {
-            make_shader(gl, Self::get_kind(), |shader_name| {
+            make_shader(gl, Self::kind(), |shader_name| {
                 // Load the binary
                 gl.shader_source(shader_name, Self::get_source());
 

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufWriter;
@@ -105,7 +106,8 @@ impl CompilerBuilder {
         Ok(Compiler {
             compiler: shaderc::Compiler::new().unwrap(),
             skip_cargo: self.skip_cargo,
-            shader_names: Vec::new(),
+            wrapped_shaders: HashMap::new(),
+            wrapped_programs: HashMap::new(),
             dest: self.dest.expect(
                 "dest was not specified for the compiler and the OUT_DIR variable was not defined",
             ),
@@ -115,9 +117,56 @@ impl CompilerBuilder {
     }
 }
 
+struct WrappedShader {
+    rs_file_name: String,
+    uniforms: Vec<crate::reflect::FoundUniform>,
+
+    shader_struct_name: String,
+    shader_variable_name: String,
+    uniform_struct_name: String,
+    uniform_locations_name: String,
+}
+
+impl WrappedShader {
+    pub fn new(base_name: &str) -> Self {
+        let shader_struct_name = (base_name.to_owned() + "_shader").to_camel_case();
+        let shader_variable_name = shader_struct_name.to_snake_case();
+
+        Self {
+            rs_file_name: base_name.to_owned() + ".rs",
+            uniforms: Vec::new(),
+            shader_struct_name,
+            shader_variable_name,
+            uniform_struct_name: (base_name.to_owned() + "_uniforms").to_camel_case(),
+            uniform_locations_name: (base_name.to_owned() + "_locations").to_snake_case(),
+        }
+    }
+
+    pub fn shader_struct_name(&self) -> &str {
+        &self.shader_struct_name
+    }
+
+    pub fn shader_variable_name(&self) -> &str {
+        &self.shader_variable_name
+    }
+
+    pub fn uniform_struct_name(&self) -> &str {
+        &self.uniform_struct_name
+    }
+
+    pub fn uniform_locations_name(&self) -> &str {
+        &self.uniform_locations_name
+    }
+}
+
+struct WrappedProgram {
+    rs_file_name: String,
+}
+
 pub struct Compiler {
     compiler: shaderc::Compiler,
-    shader_names: Vec<String>,
+    wrapped_shaders: HashMap<PathBuf, WrappedShader>,
+    wrapped_programs: HashMap<String, WrappedProgram>,
     skip_cargo: bool,
     dest: PathBuf,
     skip_spirv: bool,
@@ -186,37 +235,46 @@ impl Compiler {
 
     fn write_rust_wrapper(
         &self,
-        base_name: &str,
+        wrapped_shader: &WrappedShader,
         shader: &str,
         kind: ShaderKindInfo,
         shader_file_name: &str,
-        uniforms: &Vec<crate::reflect::FoundUniform>,
-    ) -> Result<String> {
-        let rs_file_name = String::from(base_name) + ".rs";
-
+    ) -> Result<()> {
         // Write Rust interface code
-        let output_rs = File::create(&self.dest.join(&rs_file_name)).unwrap();
+        let output_rs = File::create(&self.dest.join(&wrapped_shader.rs_file_name)).unwrap();
         let mut wr = BufWriter::new(output_rs);
 
-        let struct_name = (String::from(base_name) + "_shader").to_camel_case();
-        let uniform_trait_name = (String::from(base_name) + "_uniforms").to_camel_case();
-
+        // Shader resource structure
         writeln!(wr, "/// {} Rust wrapper", shader)?;
-        writeln!(wr, "pub struct {} {{}}", struct_name)?;
+        writeln!(wr, "pub struct {} {{", wrapped_shader.shader_struct_name())?;
+        writeln!(
+            wr,
+            "    name: <::tinygl::glow::Context as ::tinygl::HasContext>::Shader,"
+        )?;
+        writeln!(wr, "}}")?;
+
+        writeln!(wr, "impl {} {{", wrapped_shader.shader_struct_name())?;
+        writeln!(wr, "    pub fn build(gl: &::tinygl::Context) -> Result<Self, String> {{")?;
+        writeln!(wr, "        Ok(Self {{ name: <Self as {st}>::build(gl)? }})",
+            st = if let TargetType::Glsl(_) = self.output_type {
+                "::tinygl::SourceShader"
+            } else {
+                "::tinygl::BinaryShader"
+            })?;
+        writeln!(wr, "    }}")?;
+        writeln!(wr, "}}")?;
 
         // Write struct for holding uniform locations
         writeln!(wr, "#[derive(Default)]")?;
-        writeln!(wr, "pub struct {} {{", uniform_trait_name)?;
+        writeln!(wr, "pub struct {} {{", wrapped_shader.uniform_struct_name())?;
 
-        for uniform in uniforms {
-            let uniform_location_name = (uniform.name.clone() + "_location").to_snake_case();
-
+        for uniform in &wrapped_shader.uniforms {
             writeln!(wr, "    {name}: Option<<::tinygl::glow::Context as ::tinygl::glow::HasContext>::UniformLocation>,",
-                name = uniform_location_name)?;
+                name = uniform.location_name())?;
         }
         writeln!(wr, "}}")?;
 
-        writeln!(wr, "impl {} {{", uniform_trait_name)?;
+        writeln!(wr, "impl {} {{", wrapped_shader.uniform_struct_name())?;
         // Write constructor
         writeln!(
             wr,
@@ -226,35 +284,31 @@ impl Compiler {
             } else {
                 "_"
             })?;
-        writeln!(
-            wr,
-            "        Self {{")?;
+        writeln!(wr, "        Self {{")?;
 
-        for uniform in uniforms {
-            let uniform_location_name = (uniform.name.clone() + "_location").to_snake_case();
-
+        for uniform in &wrapped_shader.uniforms {
             if let TargetType::Glsl(_) = self.output_type {
                 // Source shader: find uniform locations from variable names
                 writeln!(wr, "            {name}: unsafe {{ gl.get_uniform_location(program, \"{uniform_name}\") }},",
-                    name = uniform_location_name,
+                    name = uniform.location_name(),
                     uniform_name = uniform.name)?;
             } else {
                 // Binary shader: assume locations form reflection on SPIR-V
-                writeln!(wr, "            {name}: Some({location}),",
-                    name = uniform_location_name,
-                    location = uniform.location)?;
+                writeln!(
+                    wr,
+                    "            {name}: Some({location}),",
+                    name = uniform.location_name(),
+                    location = uniform.location
+                )?;
             }
         }
 
-        writeln!(
-            wr,
-            "        }}")?;
+        writeln!(wr, "        }}")?;
         writeln!(wr, "    }}")?;
 
         // Write setter methods
-        for uniform in uniforms {
+        for uniform in &wrapped_shader.uniforms {
             let ty = uniform.ty.unwrap();
-            let uniform_location_name = (uniform.name.clone() + "_location").to_snake_case();
 
             writeln!(
                 wr,
@@ -268,7 +322,7 @@ impl Compiler {
             writeln!(wr, "        unsafe {{ gl.uniform_{components}_{rstype}_slice(self.{location}.as_ref(), {what}) }};",
                 components = ty.components(),
                 rstype = ty.rstype(),
-                location = uniform_location_name,
+                location = uniform.location_name(),
                 what = ty.glow_value("value"))?;
 
             writeln!(wr, "    }}")?;
@@ -276,9 +330,28 @@ impl Compiler {
         writeln!(wr, "}}")?;
 
         // A wrapped shader implements ShaderCommon
-        writeln!(wr, "impl ::tinygl::ShaderCommon for {} {{", struct_name)?;
-        writeln!(wr, "    fn get_kind() -> u32 {{")?;
+        writeln!(
+            wr,
+            "impl ::tinygl::ShaderCommon for {} {{",
+            wrapped_shader.shader_struct_name()
+        )?;
+        writeln!(wr, "    fn kind() -> u32 {{")?;
         writeln!(wr, "        ::tinygl::gl::{}", kind.constant_name)?;
+        writeln!(wr, "    }}")?;
+        writeln!(
+            wr,
+            "    fn name(&self) -> <::tinygl::glow::Context as ::tinygl::HasContext>::Shader {{"
+        )?;
+        writeln!(wr, "        self.name")?;
+        writeln!(wr, "    }}")?;
+        writeln!(wr, "}}")?;
+
+        // Implement GlDrop
+        writeln!(wr, "impl ::tinygl::GlDrop for {} {{", wrapped_shader.shader_struct_name())?;
+        writeln!(wr, "    fn drop(&mut self, gl: &::tinygl::Context) {{")?;
+        writeln!(wr, "        use ::tinygl::HasContext;")?;
+        writeln!(wr, "        use ::tinygl::ShaderCommon;")?;
+        writeln!(wr, "        unsafe {{ gl.delete_shader(self.name()) }};")?;
         writeln!(wr, "    }}")?;
         writeln!(wr, "}}")?;
 
@@ -287,7 +360,7 @@ impl Compiler {
             writeln!(
                 wr,
                 "impl ::tinygl::SourceShader<'static> for {} {{",
-                struct_name
+                wrapped_shader.shader_struct_name()
             )?;
             writeln!(wr, "    fn get_source() -> &'static str {{")?;
             writeln!(wr, "        include_str!(\"{}\")", shader_file_name)?;
@@ -297,7 +370,7 @@ impl Compiler {
             writeln!(
                 wr,
                 "impl ::tinygl::BinaryShader<'static> for {} {{",
-                struct_name
+                wrapped_shader.shader_struct_name()
             )?;
             writeln!(wr, "    fn get_binary() -> &'static [u8] {{")?;
             writeln!(wr, "        include_bytes!(\"{}\")", shader_file_name)?;
@@ -305,7 +378,7 @@ impl Compiler {
             writeln!(wr, "}}")?;
         }
 
-        Ok(rs_file_name)
+        Ok(())
     }
 
     pub fn wrap_shader(&mut self, source_path: impl AsRef<Path>) -> Result<()> {
@@ -331,7 +404,7 @@ impl Compiler {
         let kind = ShaderKindInfo::from_path(&source_path)
             .expect("no file extension on path, cannot determine shader type");
 
-        let (res, rs_file_name) = {
+        let wrapped_shader_entry = {
             // Set callback
             let mut options = shaderc::CompileOptions::new().unwrap();
 
@@ -387,52 +460,209 @@ impl Compiler {
 
                     // Base name to identify this shader
                     let base_name = shader.replace(".", "_");
+                    let mut wrapped_shader = WrappedShader::new(&base_name);
 
                     // Extract uniforms from SPIR-V representation
-                    let uniforms = if !self.skip_spirv {
+                    if !self.skip_spirv {
                         // Extract uniform data
                         let mut loader = rspirv::mr::Loader::new();
                         rspirv::binary::parse_words(binary_result.as_binary(), &mut loader)
                             .unwrap();
                         let module = loader.module();
 
-                        crate::reflect::find_uniforms(&module)
-                    } else {
-                        // TODO: Run glsl parser on transpiled source to extract active uniforms?
-                        Vec::new()
-                    };
+                        wrapped_shader.uniforms = crate::reflect::find_uniforms(&module)
+                    }
 
                     let shader_file_name = self.write_shader(&shader, &binary_result)?;
-                    let rs_file_name = self.write_rust_wrapper(
-                        &base_name,
-                        &shader,
-                        kind,
-                        &shader_file_name,
-                        &uniforms,
-                    )?;
+                    self.write_rust_wrapper(&wrapped_shader, &shader, kind, &shader_file_name)?;
 
-                    (Ok(()), Some(rs_file_name))
+                    Ok(wrapped_shader)
                 }
                 Err(shaderc::Error::CompilationError(num_errors, errors)) => {
                     if !self.skip_cargo {
                         eprintln!("{}", errors);
                     }
 
-                    (
-                        Err(Error::CompilationError(num_errors as usize, errors)),
-                        None,
-                    )
+                    Err(Error::CompilationError(num_errors as usize, errors))
                 }
                 Err(error) => panic!(error.to_string()),
             }
         };
 
-        if let Some(rs_file_name) = rs_file_name {
-            // Add to list of files to include
-            self.shader_names.push(rs_file_name);
+        match wrapped_shader_entry {
+            Ok(wrapped_shader) => {
+                // Add to list of files to include
+                self.wrapped_shaders.insert(source_path, wrapped_shader);
+                Ok(())
+            }
+            Err(error) => Err(error),
         }
+    }
 
-        res
+    pub fn wrap_program(&mut self, attached_shaders: &[&str], program_name: &str) -> Result<()> {
+        // Find wrapped shader details
+        let shaders: std::result::Result<Vec<_>, _> = attached_shaders
+            .iter()
+            .map(|name| {
+                std::fs::canonicalize(name)
+                    .map_err(|err| err.into())
+                    .and_then(|path| {
+                        self.wrapped_shaders
+                            .get(&path)
+                            .ok_or_else(|| Error::UnwrappedShader((*name).to_owned()))
+                    })
+            })
+            .collect();
+
+        // Unwrap to propagate errors
+        let shaders = shaders?;
+        let shaders_with_uniforms: Vec<_> =
+            shaders.iter().filter(|s| !s.uniforms.is_empty()).collect();
+
+        // Write Rust program code
+        let rs_file_name = program_name.to_snake_case() + "_program.rs";
+        let output_rs = File::create(&self.dest.join(&rs_file_name))?;
+        let mut wr = BufWriter::new(output_rs);
+
+        let program_struct_name = program_name.to_camel_case() + "Program";
+
+        writeln!(wr, "pub struct {} {{", program_struct_name)?;
+        // Program name handle
+        writeln!(
+            wr,
+            "    name: <::tinygl::glow::Context as ::tinygl::HasContext>::Program,"
+        )?;
+        // Write uniform handles
+        for shader in &shaders_with_uniforms {
+            writeln!(
+                wr,
+                "    {}: {},",
+                shader.uniform_locations_name(),
+                shader.uniform_struct_name()
+            )?;
+        }
+        writeln!(wr, "}}")?;
+
+        writeln!(wr, "impl {} {{", program_struct_name)?;
+        // Constructor function
+        writeln!(wr, "    pub fn new(gl: &::tinygl::Context,")?;
+        // Add shader parameters
+        for shader in &shaders {
+            writeln!(
+                wr,
+                "               {param_name}: &{param_type},",
+                param_name = shader.shader_variable_name(),
+                param_type = shader.shader_struct_name()
+            )?;
+        }
+        writeln!(wr, "              ) -> Result<Self, String> {{")?;
+        writeln!(wr, "        use ::tinygl::ShaderCommon;")?;
+        writeln!(wr, "        use ::tinygl::HasContext;")?;
+        writeln!(wr, "        unsafe {{")?;
+        writeln!(wr, "            let program_name = gl.create_program()?;")?;
+        for shader in &shaders {
+            writeln!(
+                wr,
+                "            gl.attach_shader(program_name, {}.name());",
+                shader.shader_variable_name()
+            )?;
+        }
+        writeln!(wr, "            gl.link_program(program_name);")?;
+        for shader in &shaders {
+            writeln!(
+                wr,
+                "            gl.detach_shader(program_name, {}.name());",
+                shader.shader_variable_name()
+            )?;
+        }
+        writeln!(
+            wr,
+            "            if !gl.get_program_link_status(program_name) {{"
+        )?;
+        writeln!(
+            wr,
+            "                let error = gl.get_program_info_log(program_name);"
+        )?;
+        writeln!(wr, "                gl.delete_program(program_name);")?;
+        writeln!(wr, "                return Err(error);")?;
+        writeln!(wr, "            }}")?;
+        writeln!(wr, "            Ok(Self {{")?;
+        writeln!(wr, "                name: program_name,")?;
+        for shader in &shaders_with_uniforms {
+            writeln!(
+                wr,
+                "                {}: {}::new(gl, program_name),",
+                shader.uniform_locations_name(),
+                shader.uniform_struct_name()
+            )?;
+        }
+        writeln!(wr, "            }})")?;
+        writeln!(wr, "        }}")?;
+        writeln!(wr, "    }}")?;
+        // Write builder (constructs shaders and then calls the constructor)
+        writeln!(wr, "    pub fn build(gl: &::tinygl::Context) -> Result<Self, String> {{")?;
+        for shader in &shaders {
+            writeln!(wr, "        let {} = ::tinygl::GlHandle::new(gl, {}::build(gl)?);",
+                shader.shader_variable_name(),
+                shader.shader_struct_name())?;
+        }
+        writeln!(wr, "        Ok(Self::new(")?;
+        writeln!(wr, "            gl,")?;
+        for shader in &shaders {
+            writeln!(
+                wr,
+                "            {name}.as_ref(),", name = shader.shader_variable_name(),
+            )?;
+        }
+        writeln!(wr, "        )?)")?;
+        writeln!(wr, "    }}")?;
+        // Uniform setters for the included shaders
+        for shader in &shaders_with_uniforms {
+            for uniform in &shader.uniforms {
+                let ty = uniform.ty.unwrap();
+
+                writeln!(
+                    wr,
+                    "    pub fn set_{uniform_sc_name}(&self, gl: &::tinygl::Context, value: {type_name}) {{",
+                    uniform_sc_name = uniform.name.to_snake_case(),
+                    type_name = ty.cgmath_name()
+                )?;
+
+                writeln!(
+                    wr,
+                    "        self.{location_name}.set_{uniform_sc_name}(gl, value);",
+                    location_name = shader.uniform_locations_name(),
+                    uniform_sc_name = uniform.name.to_snake_case(),
+                )?;
+
+                writeln!(wr, "    }}")?;
+            }
+        }
+        writeln!(wr, "}}")?;
+
+        // Implement ProgramCommon
+        writeln!(wr, "impl ::tinygl::ProgramCommon for {} {{", program_struct_name)?;
+        // Name getter
+        writeln!(wr, "    fn name(&self) -> <::tinygl::glow::Context as ::tinygl::HasContext>::Program {{")?;
+        writeln!(wr, "        self.name")?;
+        writeln!(wr, "    }}")?;
+        writeln!(wr, "}}")?;
+
+        // Implement GlDrop
+        writeln!(wr, "impl ::tinygl::GlDrop for {} {{", program_struct_name)?;
+        writeln!(wr, "    fn drop(&mut self, gl: &::tinygl::Context) {{")?;
+        writeln!(wr, "        use ::tinygl::HasContext;")?;
+        writeln!(wr, "        use ::tinygl::ProgramCommon;")?;
+        writeln!(wr, "        unsafe {{ gl.delete_program(self.name()) }};")?;
+        writeln!(wr, "    }}")?;
+        writeln!(wr, "}}")?;
+
+
+        // Add to list of wrapped programs
+        self.wrapped_programs
+            .insert(program_name.to_owned(), WrappedProgram { rs_file_name });
+
+        Ok(())
     }
 
     pub fn write_root_include(&self) -> Result<()> {
@@ -440,8 +670,16 @@ impl Compiler {
         let output_rs = File::create(&self.dest.join("shaders.rs"))?;
         let mut wr = BufWriter::new(output_rs);
 
-        for shader in &self.shader_names {
-            writeln!(wr, "include!(\"{}\");", shader)?;
+        // Include shaders
+        for (source_path, shader) in &self.wrapped_shaders {
+            writeln!(wr, "// {}", source_path.to_string_lossy())?;
+            writeln!(wr, "include!(\"{}\");", shader.rs_file_name)?;
+        }
+
+        // Include programs
+        for (program_name, program) in &self.wrapped_programs {
+            writeln!(wr, "// {}", program_name)?;
+            writeln!(wr, "include!(\"{}\");", program.rs_file_name)?;
         }
 
         Ok(())
