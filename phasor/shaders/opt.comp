@@ -1,0 +1,184 @@
+#version 460
+#extension GL_ARB_shader_image_load_store : enable
+
+#define compute_Intensite false
+#define mesure 2
+#define method 1
+#define K int(gl_WorkGroupSize.x)
+#include "shared.h"
+
+#define M_PI 3.14159265358979323846
+
+layout(location = 3, r32f) coherent uniform imageBuffer u_Kernels;
+#ifdef compute_Intensite
+layout(location = 4, r32f) coherent uniform imageBuffer u_Intensity;
+#endif
+
+layout(location = 0) uniform int u_GridX;
+layout(location = 1) uniform int u_GridY;
+
+layout(location = 2) uniform int u_OptMethod;
+
+#include "gabor.glsl"
+
+// gl_LocalInvocationID
+// gl_GlobalInvocationID
+// gl_WorkGroupID
+// gl_NumWorkGroups
+// gl_LocalGroupSizeARB
+
+shared float[MAX_K * NFLOATS * 9] kernels;
+
+float gaussian(vec2 p) {
+    return exp(-dot(p, p) * u_NoiseBandwidth * u_NoiseBandwidth);
+}
+
+vec2 kernelAt(vec2 kpos, float kangle, float kphase, float kfrequ, vec2 at) {
+    float g = gaussian(at - kpos);
+    vec2 kdir = vec2(cos(kangle), sin(kangle));
+    float a = kfrequ * dot(at - kpos, kdir) * 2.0 * M_PI + kphase;
+    return vec2(g * cos(a), g * sin(a));
+}
+
+void main() {
+    int gi = int(gl_WorkGroupID.x) % u_GridX;
+    int gj = int(gl_WorkGroupID.x) / u_GridX;
+    vec2 gs = 32.0 / vec2(u_GridX, u_GridY);
+    int kernelId = int(gl_GlobalInvocationID.x - gl_WorkGroupID.x * K);
+    /////////////////////////////////////////////
+    /// Pre fetch
+    /////////////////////////////////////////////
+    {
+        for (int j = -1; j <= 1; j++) {
+            for (int i = -1; i <= 1; i++) {
+                int ci = cell_idx(i + gi);
+                int cj = cell_idy(j + gj);
+                if (ci > -1 && cj > -1) {
+                    int idx = ((ci + cj * u_GridX) * K + kernelId) * NFLOATS;
+                    int kid = ((i + 1) + (j + 1) * 3) * K * NFLOATS +
+                              kernelId * NFLOATS;
+                    kernels[kid] =
+                        float(ci) + imageLoad(u_Kernels, int(idx) + 0).x;
+                    kernels[kid + 1] =
+                        float(cj) + imageLoad(u_Kernels, int(idx) + 1).x;
+                    kernels[kid + 2] = imageLoad(u_Kernels, int(idx) + 2).x;
+                    kernels[kid + 3] = imageLoad(u_Kernels, int(idx) + 3).x;
+                    kernels[kid + 4] = imageLoad(u_Kernels, int(idx) + 4).x;
+                    kernels[kid + 5] = imageLoad(u_Kernels, int(idx) + 5).x;
+                } else {
+                    int kid = ((i + 1) + (j + 1) * 3) * K * NFLOATS +
+                              kernelId * NFLOATS;
+                    kernels[kid] = -10.0;  // impossible value
+                    kernels[kid + 1] = -10.0;
+                    kernels[kid + 2] = 0.0;
+                    kernels[kid + 3] = 0.0;
+                    kernels[kid + 4] = 0.0;
+                    kernels[kid + 5] = 0.0;
+                }
+            }
+        }
+    }
+    memoryBarrier();
+    barrier();
+    vec2 kpos;
+    float kphase, kangle, kfrequ;
+    int kid = 4 * K * NFLOATS + kernelId * NFLOATS;
+    kpos.x = kernels[kid];
+    kpos.y = kernels[kid + 1];
+    kfrequ = gs.x * kernels[kid + 2];
+    kphase = kernels[kid + 3];
+    kangle = kernels[kid + 4];
+    // candidate phases
+    float phase_inc = gs.x * kfrequ * 2.0f * M_PI / 64.0;
+    float angle_inc = M_PI / 2000.0;
+    const int num_cand_phases = 3;
+    const int num_cand_angles = 3;
+    float cand_phases[num_cand_phases] = {kphase, kphase - phase_inc,
+                                          kphase + phase_inc};
+    float cand_angles[num_cand_angles] = {kangle, kangle - angle_inc,
+                                          kangle + angle_inc};
+    // float cand_angles[num_cand_angles] = { kangle };
+    // record votes
+    float votes[num_cand_phases * num_cand_angles];
+    for (int i = 0; i < num_cand_phases * num_cand_angles;
+         i++) {  // SL: is this really necessary? default register init to zero?
+        votes[i] = 0;
+    }
+    // for each neighbor, include self
+    vec2 npos;
+    float nphase, nangle, nfrequ;
+    if (u_OptMethod == 0) {
+        for (int k2 = 0; k2 < K * NFLOATS * 9; k2 += NFLOATS) {
+            npos.x = kernels[k2];
+            npos.y = kernels[k2 + 1];
+            nfrequ = gs.x * kernels[k2 + 2];
+            nphase = kernels[k2 + 3];
+            nangle = kernels[k2 + 4];
+            if (npos.x > -10.0)  // border clamping
+            {
+                // evaluate at mid-point
+                vec2 pos = (kpos + npos) / 2.0;
+                // try each phase update, select best
+                float I_max = -1.0;
+                int I_max_arg = -1;
+                vec2 nv = phasor(pos - npos, nphase,
+                                 vec2(cos(nangle), sin(nangle)), nfrequ);
+                for (int cph = 0; cph < num_cand_phases; cph++) {
+                    for (int cag = 0; cag < num_cand_angles; cag++) {
+                        vec2 kv = phasor(
+                            pos - kpos, cand_phases[cph],
+                            vec2(cos(cand_angles[cag]), sin(cand_angles[cag])),
+                            kfrequ);
+                        float I = length(nv + kv);
+                        if (I > I_max) {
+                            I_max = I;
+                            I_max_arg = cph * num_cand_angles + cag;
+                        }
+                    }
+                }
+                votes[I_max_arg] += 1.0;
+            }
+        }
+        // check the one with most votes
+        int best = -1;
+        float best_n = 0;
+        for (int v = 0; v < num_cand_phases * num_cand_angles; v++) {
+            if (votes[v] > best_n) {
+                best = v;
+                best_n = votes[v];
+            }
+        }
+
+        kangle = cand_angles[best % num_cand_angles];
+        kphase = cand_phases[best / num_cand_angles];
+        imageStore(u_Kernels, int(gl_GlobalInvocationID.x * NFLOATS) + 3,
+                   vec4(kphase));
+        // imageStore(u_Kernels, int(gl_GlobalInvocationID.x * NFLOATS) + 4,
+        // vec4(kangle));
+    } else {
+        vec2 tv = vec2(0.0);
+
+        for (int k2 = 0; k2 < K * NFLOATS * 9; k2 += NFLOATS) {
+            npos.x = kernels[k2];
+            npos.y = kernels[k2 + 1];
+            nfrequ = gs.x * kernels[k2 + 2];
+            nphase = kernels[k2 + 3];
+            nangle = kernels[k2 + 4];
+            if (npos.x > -10.0) {  // border clamping
+                vec2 ph = phasor(kpos - npos, nphase,
+                                 vec2(cos(nangle), sin(nangle)), nfrequ);
+                if (length(ph) > 1e-6) {
+                    float w = max(0.0, dot(vec2(cos(nangle), sin(nangle)),
+                                           vec2(cos(kangle), sin(kangle))));
+                    tv += w * normalize(ph);
+                }
+            }
+        }
+
+        float nph = atan(tv.y, tv.x);
+        imageStore(u_Kernels, int(gl_GlobalInvocationID.x * NFLOATS) + 3,
+                   vec4(nph));
+    }
+}
+
+// vim: ft=glsl

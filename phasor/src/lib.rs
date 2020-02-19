@@ -13,7 +13,9 @@ pub struct Demo {}
 
 pub struct State {
     // TODO: Handle cleanup using GlHandle
-    program: shaders::DemoProgram,
+    display_program: shaders::DisplayProgram,
+    init_program: shaders::InitProgram,
+    opt_program: shaders::OptProgram,
 }
 
 impl tinygl::boilerplate::Demo for Demo {
@@ -28,13 +30,11 @@ impl tinygl::boilerplate::Demo for Demo {
             vao_name
         };
 
-        // Build the main program
-        let program = shaders::DemoProgram::build(gl)?;
-
-        // Use the main program
-        unsafe { gl.use_program(Some(program.name())) };
-
-        Ok(State { program })
+        Ok(State {
+            display_program: shaders::DisplayProgram::build(&gl)?,
+            init_program: shaders::InitProgram::build(&gl)?,
+            opt_program: shaders::OptProgram::build(&gl)?,
+        })
     }
 
     fn render(&mut self, gl: &tinygl::Context, state: &mut State) {
@@ -43,8 +43,10 @@ impl tinygl::boilerplate::Demo for Demo {
             gl.clear_color(1.0, 0.0, 1.0, 1.0);
             gl.clear(tinygl::gl::COLOR_BUFFER_BIT);
 
+            // Use the main program
+            gl.use_program(Some(state.display_program.name()));
+
             // Set uniforms
-            state.program.set_u_stuff(&gl, cgmath::vec3(1, 1, 1));
 
             // Draw current program
             gl.draw_arrays(tinygl::gl::TRIANGLES, 0, 3);
