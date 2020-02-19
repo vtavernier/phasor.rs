@@ -16,7 +16,10 @@ impl FoundUniform {
     }
 }
 
-pub fn find_uniforms(module: &rspirv::mr::Module) -> Vec<FoundUniform> {
+pub fn find_uniforms(
+    shader_path: &str,
+    module: &rspirv::mr::Module,
+) -> Result<Vec<FoundUniform>, crate::Error> {
     // Find constants
     let mut constants = std::collections::HashMap::new();
 
@@ -139,9 +142,19 @@ pub fn find_uniforms(module: &rspirv::mr::Module) -> Vec<FoundUniform> {
                     if let Some(v) = names.get_mut(&result_id) {
                         let tp = type_global_value.result_type.unwrap();
 
-                        // Assign type using pointer table
-                        v.ty = Some(types[&type_pointers[&tp]]);
-                        v.location_name = (v.name.clone() + "_location").to_snake_case();
+                        match types.get(&type_pointers[&tp]) {
+                            Some(ty) => {
+                                v.ty = Some(*ty);
+                                v.location_name = (v.name.clone() + "_location").to_snake_case();
+                            }
+                            None => {
+                                println!(
+                                    "cargo:warning={}: {}: unsupported type, it will not be wrapped",
+                                    shader_path,
+                                    v.name
+                                );
+                            }
+                        }
                     } else {
                         panic!("failed to get result_id");
                     }
@@ -158,5 +171,5 @@ pub fn find_uniforms(module: &rspirv::mr::Module) -> Vec<FoundUniform> {
         .collect::<Vec<_>>();
 
     v.sort_by_key(|item| item.location);
-    v
+    Ok(v)
 }

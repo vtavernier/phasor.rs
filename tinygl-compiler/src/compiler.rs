@@ -471,6 +471,9 @@ impl Compiler {
                     let base_name = shader.replace(".", "_");
                     let mut wrapped_shader = WrappedShader::new(&base_name);
 
+                    // Write the shader binary before the rest of the parsing, for debugging
+                    let shader_file_name = self.write_shader(&shader, &binary_result)?;
+
                     // Extract uniforms from SPIR-V representation
                     if !self.skip_spirv {
                         // Extract uniform data
@@ -479,10 +482,10 @@ impl Compiler {
                             .unwrap();
                         let module = loader.module();
 
-                        wrapped_shader.uniforms = crate::reflect::find_uniforms(&module)
+                        wrapped_shader.uniforms =
+                            crate::reflect::find_uniforms(&source_path.to_string_lossy(), &module)?;
                     }
 
-                    let shader_file_name = self.write_shader(&shader, &binary_result)?;
                     self.write_rust_wrapper(&wrapped_shader, &shader, kind, &shader_file_name)?;
 
                     Ok(wrapped_shader)
