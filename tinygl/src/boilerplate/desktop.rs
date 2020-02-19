@@ -1,6 +1,6 @@
-pub fn run_boilerplate<'a, T>(mut demo: T)
+pub fn run_boilerplate<T>(mut demo: T)
 where
-    T: super::Demo<'a> + 'static,
+    T: super::Demo + 'static,
     T::Error: std::fmt::Debug,
     T::State: 'static
 {

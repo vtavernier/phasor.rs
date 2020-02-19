@@ -280,10 +280,19 @@ impl Compiler {
             wr,
             "    pub fn new({prefix}gl: &::tinygl::Context, {prefix}program: <::tinygl::glow::Context as ::tinygl::glow::HasContext>::Program) -> Self {{",
             prefix = if let TargetType::Glsl(_) = self.output_type {
-                ""
+                if wrapped_shader.uniforms.is_empty() {
+                    "_"
+                } else {
+                    ""
+                }
             } else {
                 "_"
             })?;
+        if let TargetType::Glsl(_) = self.output_type {
+            if !wrapped_shader.uniforms.is_empty() {
+                writeln!(wr, "        use ::tinygl::HasContext;")?;
+            }
+        }
         writeln!(wr, "        Self {{")?;
 
         for uniform in &wrapped_shader.uniforms {

@@ -16,7 +16,7 @@ pub struct State {
     program: shaders::DemoProgram,
 }
 
-impl<'a> tinygl::boilerplate::Demo<'a> for Demo {
+impl tinygl::boilerplate::Demo for Demo {
     type State = State;
     type Error = String;
 
@@ -51,7 +51,7 @@ impl<'a> tinygl::boilerplate::Demo<'a> for Demo {
         }
     }
 
-    fn title(&self) -> &'a str {
-        "phasor.rs"
+    fn title(&self) -> String {
+        "phasor.rs".to_owned()
     }
 }

@@ -1,8 +1,8 @@
-pub fn run<'a, T>(
+pub fn run<T>(
     canvas: web_sys::HtmlCanvasElement,
 ) -> Result<(crate::Context, T, T::State), wasm_bindgen::JsValue>
 where
-    T: super::Demo<'a> + Default + 'static,
+    T: super::Demo + Default + 'static,
     T::Error: std::fmt::Debug,
 {
     use wasm_bindgen::JsCast;
@@ -35,7 +35,7 @@ macro_rules! impl_web_demo {
         pub struct WebState {
             gl: tinygl::Context,
             demo: $e,
-            state: <$e>::State,
+            state: <$e as ::tinygl::boilerplate::Demo>::State,
         }
 
         #[wasm_bindgen]
