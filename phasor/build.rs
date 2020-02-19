@@ -11,8 +11,6 @@ fn main() {
     compiler
         .wrap_program(&["shaders/init.comp"], "init")
         .unwrap();
-    compiler
-        .wrap_program(&["shaders/opt.comp"], "opt")
-        .unwrap();
+    compiler.wrap_program(&["shaders/opt.comp"], "opt").unwrap();
     compiler.write_root_include().unwrap();
 }

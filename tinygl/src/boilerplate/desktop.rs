@@ -2,7 +2,7 @@ pub fn run_boilerplate<T>(mut demo: T)
 where
     T: super::Demo + 'static,
     T::Error: std::fmt::Debug,
-    T::State: 'static
+    T::State: 'static,
 {
     use glutin::event::{Event, WindowEvent};
     use glutin::event_loop::{ControlFlow, EventLoop};

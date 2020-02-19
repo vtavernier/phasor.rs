@@ -254,13 +254,19 @@ impl Compiler {
         writeln!(wr, "}}")?;
 
         writeln!(wr, "impl {} {{", wrapped_shader.shader_struct_name())?;
-        writeln!(wr, "    pub fn build(gl: &::tinygl::Context) -> Result<Self, String> {{")?;
-        writeln!(wr, "        Ok(Self {{ name: <Self as {st}>::build(gl)? }})",
+        writeln!(
+            wr,
+            "    pub fn build(gl: &::tinygl::Context) -> Result<Self, String> {{"
+        )?;
+        writeln!(
+            wr,
+            "        Ok(Self {{ name: <Self as {st}>::build(gl)? }})",
             st = if let TargetType::Glsl(_) = self.output_type {
                 "::tinygl::SourceShader"
             } else {
                 "::tinygl::BinaryShader"
-            })?;
+            }
+        )?;
         writeln!(wr, "    }}")?;
         writeln!(wr, "}}")?;
 
@@ -356,7 +362,11 @@ impl Compiler {
         writeln!(wr, "}}")?;
 
         // Implement GlDrop
-        writeln!(wr, "impl ::tinygl::GlDrop for {} {{", wrapped_shader.shader_struct_name())?;
+        writeln!(
+            wr,
+            "impl ::tinygl::GlDrop for {} {{",
+            wrapped_shader.shader_struct_name()
+        )?;
         writeln!(wr, "    fn drop(&mut self, gl: &::tinygl::Context) {{")?;
         writeln!(wr, "        use ::tinygl::HasContext;")?;
         writeln!(wr, "        use ::tinygl::ShaderCommon;")?;
@@ -612,18 +622,25 @@ impl Compiler {
         writeln!(wr, "        }}")?;
         writeln!(wr, "    }}")?;
         // Write builder (constructs shaders and then calls the constructor)
-        writeln!(wr, "    pub fn build(gl: &::tinygl::Context) -> Result<Self, String> {{")?;
+        writeln!(
+            wr,
+            "    pub fn build(gl: &::tinygl::Context) -> Result<Self, String> {{"
+        )?;
         for shader in &shaders {
-            writeln!(wr, "        let {} = ::tinygl::GlHandle::new(gl, {}::build(gl)?);",
+            writeln!(
+                wr,
+                "        let {} = ::tinygl::GlHandle::new(gl, {}::build(gl)?);",
                 shader.shader_variable_name(),
-                shader.shader_struct_name())?;
+                shader.shader_struct_name()
+            )?;
         }
         writeln!(wr, "        Ok(Self::new(")?;
         writeln!(wr, "            gl,")?;
         for shader in &shaders {
             writeln!(
                 wr,
-                "            {name}.as_ref(),", name = shader.shader_variable_name(),
+                "            {name}.as_ref(),",
+                name = shader.shader_variable_name(),
             )?;
         }
         writeln!(wr, "        )?)")?;
@@ -653,9 +670,16 @@ impl Compiler {
         writeln!(wr, "}}")?;
 
         // Implement ProgramCommon
-        writeln!(wr, "impl ::tinygl::ProgramCommon for {} {{", program_struct_name)?;
+        writeln!(
+            wr,
+            "impl ::tinygl::ProgramCommon for {} {{",
+            program_struct_name
+        )?;
         // Name getter
-        writeln!(wr, "    fn name(&self) -> <::tinygl::glow::Context as ::tinygl::HasContext>::Program {{")?;
+        writeln!(
+            wr,
+            "    fn name(&self) -> <::tinygl::glow::Context as ::tinygl::HasContext>::Program {{"
+        )?;
         writeln!(wr, "        self.name")?;
         writeln!(wr, "    }}")?;
         writeln!(wr, "}}")?;
@@ -668,7 +692,6 @@ impl Compiler {
         writeln!(wr, "        unsafe {{ gl.delete_program(self.name()) }};")?;
         writeln!(wr, "    }}")?;
         writeln!(wr, "}}")?;
-
 
         // Add to list of wrapped programs
         self.wrapped_programs
