@@ -17,8 +17,6 @@ layout(location = 4, r32f) coherent uniform imageBuffer u_Intensity;
 layout(location = 0) uniform int u_GridX;
 layout(location = 1) uniform int u_GridY;
 
-layout(location = 2) uniform int u_OptMethod;
-
 #include "gabor.glsl"
 
 // gl_LocalInvocationID
@@ -107,78 +105,29 @@ void main() {
     // for each neighbor, include self
     vec2 npos;
     float nphase, nangle, nfrequ;
-    if (u_OptMethod == 0) {
-        for (int k2 = 0; k2 < K * NFLOATS * 9; k2 += NFLOATS) {
-            npos.x = kernels[k2];
-            npos.y = kernels[k2 + 1];
-            nfrequ = gs.x * kernels[k2 + 2];
-            nphase = kernels[k2 + 3];
-            nangle = kernels[k2 + 4];
-            if (npos.x > -10.0)  // border clamping
-            {
-                // evaluate at mid-point
-                vec2 pos = (kpos + npos) / 2.0;
-                // try each phase update, select best
-                float I_max = -1.0;
-                int I_max_arg = -1;
-                vec2 nv = phasor(pos - npos, nphase,
-                                 vec2(cos(nangle), sin(nangle)), nfrequ);
-                for (int cph = 0; cph < num_cand_phases; cph++) {
-                    for (int cag = 0; cag < num_cand_angles; cag++) {
-                        vec2 kv = phasor(
-                            pos - kpos, cand_phases[cph],
-                            vec2(cos(cand_angles[cag]), sin(cand_angles[cag])),
-                            kfrequ);
-                        float I = length(nv + kv);
-                        if (I > I_max) {
-                            I_max = I;
-                            I_max_arg = cph * num_cand_angles + cag;
-                        }
-                    }
-                }
-                votes[I_max_arg] += 1.0;
+
+    vec2 tv = vec2(0.0);
+
+    for (int k2 = 0; k2 < K * NFLOATS * 9; k2 += NFLOATS) {
+        npos.x = kernels[k2];
+        npos.y = kernels[k2 + 1];
+        nfrequ = gs.x * kernels[k2 + 2];
+        nphase = kernels[k2 + 3];
+        nangle = kernels[k2 + 4];
+        if (npos.x > -10.0) {  // border clamping
+            vec2 ph = phasor(kpos - npos, nphase,
+                             vec2(cos(nangle), sin(nangle)), nfrequ);
+            if (length(ph) > 1e-6) {
+                float w = max(0.0, dot(vec2(cos(nangle), sin(nangle)),
+                                       vec2(cos(kangle), sin(kangle))));
+                tv += w * normalize(ph);
             }
         }
-        // check the one with most votes
-        int best = -1;
-        float best_n = 0;
-        for (int v = 0; v < num_cand_phases * num_cand_angles; v++) {
-            if (votes[v] > best_n) {
-                best = v;
-                best_n = votes[v];
-            }
-        }
-
-        kangle = cand_angles[best % num_cand_angles];
-        kphase = cand_phases[best / num_cand_angles];
-        imageStore(u_Kernels, int(gl_GlobalInvocationID.x * NFLOATS) + 3,
-                   vec4(kphase));
-        // imageStore(u_Kernels, int(gl_GlobalInvocationID.x * NFLOATS) + 4,
-        // vec4(kangle));
-    } else {
-        vec2 tv = vec2(0.0);
-
-        for (int k2 = 0; k2 < K * NFLOATS * 9; k2 += NFLOATS) {
-            npos.x = kernels[k2];
-            npos.y = kernels[k2 + 1];
-            nfrequ = gs.x * kernels[k2 + 2];
-            nphase = kernels[k2 + 3];
-            nangle = kernels[k2 + 4];
-            if (npos.x > -10.0) {  // border clamping
-                vec2 ph = phasor(kpos - npos, nphase,
-                                 vec2(cos(nangle), sin(nangle)), nfrequ);
-                if (length(ph) > 1e-6) {
-                    float w = max(0.0, dot(vec2(cos(nangle), sin(nangle)),
-                                           vec2(cos(kangle), sin(kangle))));
-                    tv += w * normalize(ph);
-                }
-            }
-        }
-
-        float nph = atan(tv.y, tv.x);
-        imageStore(u_Kernels, int(gl_GlobalInvocationID.x * NFLOATS) + 3,
-                   vec4(nph));
     }
+
+    float nph = atan(tv.y, tv.x);
+    imageStore(u_Kernels, int(gl_GlobalInvocationID.x * NFLOATS) + 3,
+               vec4(nph));
 }
 
 // vim: ft=glsl
