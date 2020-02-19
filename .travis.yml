@@ -1,0 +1,21 @@
+language: rust
+rust:
+- stable
+before_install:
+- nvm install 12.16.1
+- npm i -g wasm-pack
+cache:
+  cargo: true
+  pip: true
+script:
+- "(cd phasor && wasm-pack build)"
+- "(cd phasor/www && npm ci && npm run build)"
+after_success: |
+  [ $TRAVIS_BRANCH = master ] &&
+  [ $TRAVIS_PULL_REQUEST = false ] &&
+  pip install --user ghp-import &&
+  ghp-import -n phasor/www/dist &&
+  git push -fq https://${GH_TOKEN}@github.com/${TRAVIS_REPO_SLUG}.git gh-pages
+env:
+  global:
+    secure: kMZdLXBXxjgrnY1/ndyjXUKBWRhQ7y6cA5xS6KqLSZOyyyW1lv42t1Fu5dds0gJy4pU+SlXEu6qylO2WwJJhp2s1Ro2sY32IZNc+PJ0FXatWNXRiHlKMyvlAMDiqiHJ8aANVVc6fC8LEZY2mW+fqoZC7WvQ5EyH9P0DXomn+PDKqJlrhhIyy8T62kECgCNc4qsNHTY6HLYAHu2vmAGq3LGM/L1oFtOnIyilUgaq8FmVTAQqUfbZMyHFrAtAPjPfGWtGSi9SUKKoGE4Ozsjuxqvee4TMj+xo56a0SVskuGcpvVorToaT4CWC/qmmxeeUU9PY4N6A1pKVzhk8ArMvdye2tFO7I45Tm5HZteuaOx1H26fH8VP6Isa5QPXrubuCP02jnsZHR94LX0zQTlyZv7iYbiq0Y3nWhralI0m67BOEL4X1NqOJF+NOuldtbNFMw2OoIASpDaIIccUyT8eJ6bspSnATNsSvnz4pVmWssZcF7OmokPFh4+jF+CAKloXHCNFIOVSY/nrPbyNte6+LW+hFIgsCAA/79hYfo5ekCh+OUQWSBQO1atuQsPKFtKXv6n5rIiJfGeFca4q8Nkaa1XQor6r6yNVnWHao/zFbc1/zOvsKPc3g73DjV0jKcojbTPiFyACQb3ov+cIrc9s+HqhNl1kScE3yFLzQpRmuSrdY=
