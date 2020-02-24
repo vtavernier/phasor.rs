@@ -44,9 +44,7 @@ impl tinygl::boilerplate::Demo for Demo {
             gl.clear(tinygl::gl::COLOR_BUFFER_BIT);
 
             // Use the main program
-            gl.use_program(Some(state.display_program.name()));
-
-            // Set uniforms
+            state.display_program.use_program(gl);
 
             // Draw current program
             gl.draw_arrays(tinygl::gl::TRIANGLES, 0, 3);
