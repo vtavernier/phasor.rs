@@ -489,7 +489,7 @@ impl Compiler {
                         // Extract uniform data
                         let mut loader = rspirv::mr::Loader::new();
                         rspirv::binary::parse_words(binary_result.as_binary(), &mut loader)
-                            .unwrap();
+                            .expect(&format!("failed to parse binary module for {}", source_path.to_string_lossy()));
                         let module = loader.module();
 
                         wrapped_shader.uniforms =
