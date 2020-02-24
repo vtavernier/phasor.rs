@@ -58,6 +58,44 @@ impl ContextEx {
             constant_values.as_ptr(),
         );
     }
+
+    pub unsafe fn tex_buffer(
+        &self,
+        target: u32,
+        internal_format: u32,
+        buffer: <glow::Context as glow::HasContext>::Buffer,
+    ) {
+        self.glx.TexBuffer(target, internal_format, buffer)
+    }
+
+    pub unsafe fn memory_barrier(&self, barriers: u32) {
+        self.glx.MemoryBarrier(barriers)
+    }
+
+    pub unsafe fn bind_image_texture(
+        &self,
+        unit: u32,
+        texture: <glow::Context as glow::HasContext>::Texture,
+        level: i32,
+        layered: bool,
+        layer: i32,
+        access: u32,
+        format: u32,
+    ) {
+        self.glx.BindImageTexture(
+            unit,
+            texture,
+            level,
+            if layered {
+                super::gl::TRUE
+            } else {
+                super::gl::FALSE
+            },
+            layer,
+            access,
+            format,
+        );
+    }
 }
 
 impl std::ops::Deref for ContextEx {

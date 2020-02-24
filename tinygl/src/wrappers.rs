@@ -2,11 +2,17 @@
 
 use std::rc::Rc;
 
+mod buffer;
+pub use buffer::*;
+
 mod shader;
 pub use shader::*;
 
 mod program;
 pub use program::*;
+
+mod texture;
+pub use texture::*;
 
 /// Trait for GL objects that can be dropped
 pub trait GlDrop {
