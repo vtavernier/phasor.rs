@@ -8,7 +8,7 @@
 #define M_PI 3.14159265358979323846
 #define M_PI2 (M_PI * M_PI)
 
-layout(r32f) coherent uniform imageBuffer u_Kernels;
+layout(binding = 0, r32f) coherent uniform imageBuffer u_Kernels;
 
 layout(location = 0) uniform int u_GridX;
 layout(location = 1) uniform int u_GridY;

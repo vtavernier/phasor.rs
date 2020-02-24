@@ -5,6 +5,8 @@
 #include "shared.h"
 #define M_PI 3.14159265358979323846
 
+layout(local_size_x = 8) in;
+
 layout(location = 0) uniform int u_GridX;
 layout(location = 1) uniform int u_GridY;
 

@@ -9,7 +9,9 @@
 
 #define M_PI 3.14159265358979323846
 
-layout(location = 3, r32f) coherent uniform imageBuffer u_Kernels;
+layout(local_size_x = 8) in;
+
+layout(location = 3, binding = 0, r32f) coherent uniform imageBuffer u_Kernels;
 #ifdef compute_Intensite
 layout(location = 4, r32f) coherent uniform imageBuffer u_Intensity;
 #endif
