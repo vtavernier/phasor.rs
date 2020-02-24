@@ -7,21 +7,19 @@ mod context;
 pub use context::*;
 
 pub mod gl;
-
-mod wrappers;
-pub use wrappers::*;
+pub mod wrappers;
 
 pub use glow;
 
 pub mod prelude {
-    pub use super::HasContext;
+    pub use super::glow::HasContext;
 
-    pub use super::ProgramCommon;
-    pub use super::ShaderCommon;
+    pub use super::wrappers::ProgramCommon;
+    pub use super::wrappers::ShaderCommon;
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub use super::BinaryShader;
-    pub use super::SourceShader;
+    pub use super::wrappers::BinaryShader;
+    pub use super::wrappers::SourceShader;
 
     pub use cgmath;
 }

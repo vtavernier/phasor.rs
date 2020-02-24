@@ -67,3 +67,9 @@ impl std::ops::Deref for ContextEx {
         &self.ctx
     }
 }
+
+impl std::convert::AsRef<glow::Context> for ContextEx {
+    fn as_ref(&self) -> &glow::Context {
+        &self.ctx
+    }
+}

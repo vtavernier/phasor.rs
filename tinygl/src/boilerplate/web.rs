@@ -1,6 +1,8 @@
+use std::rc::Rc;
+
 pub fn run<T>(
     canvas: web_sys::HtmlCanvasElement,
-) -> Result<(crate::Context, T, T::State), wasm_bindgen::JsValue>
+) -> Result<(Rc<crate::Context>, T, T::State), wasm_bindgen::JsValue>
 where
     T: super::Demo + Default + 'static,
     T::Error: std::fmt::Debug,
@@ -14,7 +16,7 @@ where
             .unwrap()
             .dyn_into::<web_sys::WebGl2RenderingContext>()?;
 
-        crate::Context::from_webgl2_context(webgl2_context)
+        Rc::new(crate::Context::from_webgl2_context(webgl2_context))
     };
 
     // Initialize demo
@@ -28,12 +30,12 @@ where
 #[macro_export]
 macro_rules! impl_web_demo {
     ($e:ty) => {
-        use tinygl::boilerplate::Demo;
+        use ::tinygl::boilerplate::Demo;
         use wasm_bindgen::{prelude::*, JsCast};
 
         #[wasm_bindgen]
         pub struct WebState {
-            gl: tinygl::Context,
+            gl: Rc<::tinygl::Context>,
             demo: $e,
             state: <$e as ::tinygl::boilerplate::Demo>::State,
         }
@@ -50,7 +52,7 @@ macro_rules! impl_web_demo {
                 .dyn_into::<web_sys::HtmlCanvasElement>()
                 .expect("canvas element is required");
 
-            tinygl::boilerplate::web::run(canvas).map(|(gl, demo, state)| WebState {
+            ::tinygl::boilerplate::web::run(canvas).map(|(gl, demo, state)| WebState {
                 gl,
                 demo,
                 state,

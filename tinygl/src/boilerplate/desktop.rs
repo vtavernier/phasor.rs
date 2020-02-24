@@ -1,14 +1,16 @@
+use std::rc::Rc;
+
+use glutin::event::{Event, WindowEvent};
+use glutin::event_loop::{ControlFlow, EventLoop};
+use glutin::window::WindowBuilder;
+use glutin::ContextBuilder;
+
 pub fn run_boilerplate<T>(mut demo: T)
 where
     T: super::Demo + 'static,
     T::Error: std::fmt::Debug,
     T::State: 'static,
 {
-    use glutin::event::{Event, WindowEvent};
-    use glutin::event_loop::{ControlFlow, EventLoop};
-    use glutin::window::WindowBuilder;
-    use glutin::ContextBuilder;
-
     let el = EventLoop::new();
 
     let wb = WindowBuilder::new()
@@ -22,7 +24,7 @@ where
             .make_current()
             .expect("failed to make window context current");
         (
-            crate::Context::from_loader_function(|s| current.get_proc_address(s) as *const _),
+            Rc::new(crate::Context::from_loader_function(|s| current.get_proc_address(s) as *const _)),
             current,
         )
     };

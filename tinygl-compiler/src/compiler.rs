@@ -264,9 +264,9 @@ impl Compiler {
             wr,
             "        Ok(Self {{ name: <Self as {st}>::build(gl)? }})",
             st = if let TargetType::Glsl(_) = self.output_type {
-                "::tinygl::SourceShader"
+                "::tinygl::wrappers::SourceShader"
             } else {
-                "::tinygl::BinaryShader"
+                "::tinygl::wrappers::BinaryShader"
             }
         )?;
         writeln!(wr, "    }}")?;
@@ -360,7 +360,7 @@ impl Compiler {
         // A wrapped shader implements ShaderCommon
         writeln!(
             wr,
-            "impl ::tinygl::ShaderCommon for {} {{",
+            "impl ::tinygl::wrappers::ShaderCommon for {} {{",
             wrapped_shader.shader_struct_name()
         )?;
         writeln!(wr, "    fn kind() -> u32 {{")?;
@@ -377,12 +377,11 @@ impl Compiler {
         // Implement GlDrop
         writeln!(
             wr,
-            "impl ::tinygl::GlDrop for {} {{",
+            "impl ::tinygl::wrappers::GlDrop for {} {{",
             wrapped_shader.shader_struct_name()
         )?;
         writeln!(wr, "    fn drop(&mut self, gl: &::tinygl::Context) {{")?;
-        writeln!(wr, "        use ::tinygl::HasContext;")?;
-        writeln!(wr, "        use ::tinygl::ShaderCommon;")?;
+        writeln!(wr, "        use ::tinygl::prelude::*;")?;
         writeln!(wr, "        unsafe {{ gl.delete_shader(self.name()) }};")?;
         writeln!(wr, "    }}")?;
         writeln!(wr, "}}")?;
@@ -391,7 +390,7 @@ impl Compiler {
         if let TargetType::Glsl(_) = self.output_type {
             writeln!(
                 wr,
-                "impl ::tinygl::SourceShader<'static> for {} {{",
+                "impl ::tinygl::wrappers::SourceShader<'static> for {} {{",
                 wrapped_shader.shader_struct_name()
             )?;
             writeln!(wr, "    fn get_source() -> &'static str {{")?;
@@ -401,7 +400,7 @@ impl Compiler {
         } else {
             writeln!(
                 wr,
-                "impl ::tinygl::BinaryShader<'static> for {} {{",
+                "impl ::tinygl::wrappers::BinaryShader<'static> for {} {{",
                 wrapped_shader.shader_struct_name()
             )?;
             writeln!(wr, "    fn get_binary() -> &'static [u8] {{")?;
@@ -591,7 +590,7 @@ impl Compiler {
             )?;
         }
         writeln!(wr, "              ) -> Result<Self, String> {{")?;
-        writeln!(wr, "        use ::tinygl::ShaderCommon;")?;
+        writeln!(wr, "        use ::tinygl::wrappers::ShaderCommon;")?;
         writeln!(wr, "        use ::tinygl::HasContext;")?;
         writeln!(wr, "        unsafe {{")?;
         writeln!(wr, "            let program_name = gl.create_program()?;")?;
@@ -642,7 +641,7 @@ impl Compiler {
         for shader in &shaders {
             writeln!(
                 wr,
-                "        let {} = ::tinygl::GlHandle::new(gl, {}::build(gl)?);",
+                "        let {} = ::tinygl::wrappers::GlRefHandle::new(gl, {}::build(gl)?);",
                 shader.shader_variable_name(),
                 shader.shader_struct_name()
             )?;
@@ -685,7 +684,7 @@ impl Compiler {
         // Implement ProgramCommon
         writeln!(
             wr,
-            "impl ::tinygl::ProgramCommon for {} {{",
+            "impl ::tinygl::wrappers::ProgramCommon for {} {{",
             program_struct_name
         )?;
         // Name getter
@@ -698,10 +697,10 @@ impl Compiler {
         writeln!(wr, "}}")?;
 
         // Implement GlDrop
-        writeln!(wr, "impl ::tinygl::GlDrop for {} {{", program_struct_name)?;
+        writeln!(wr, "impl ::tinygl::wrappers::GlDrop for {} {{", program_struct_name)?;
         writeln!(wr, "    fn drop(&mut self, gl: &::tinygl::Context) {{")?;
         writeln!(wr, "        use ::tinygl::HasContext;")?;
-        writeln!(wr, "        use ::tinygl::ProgramCommon;")?;
+        writeln!(wr, "        use ::tinygl::wrappers::ProgramCommon;")?;
         writeln!(wr, "        unsafe {{ gl.delete_program(self.name()) }};")?;
         writeln!(wr, "    }}")?;
         writeln!(wr, "}}")?;

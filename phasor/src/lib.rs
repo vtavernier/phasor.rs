@@ -1,4 +1,7 @@
+use std::rc::Rc;
+
 use tinygl::prelude::*;
+use tinygl::wrappers::GlHandle;
 
 #[cfg(target_arch = "wasm32")]
 mod web;
@@ -12,17 +15,16 @@ pub mod shaders {
 pub struct Demo {}
 
 pub struct State {
-    // TODO: Handle cleanup using GlHandle
-    display_program: shaders::DisplayProgram,
-    init_program: shaders::InitProgram,
-    opt_program: shaders::OptProgram,
+    display_program: GlHandle<shaders::DisplayProgram>,
+    init_program: GlHandle<shaders::InitProgram>,
+    opt_program: GlHandle<shaders::OptProgram>,
 }
 
 impl tinygl::boilerplate::Demo for Demo {
     type State = State;
     type Error = String;
 
-    fn init(&mut self, gl: &tinygl::Context) -> Result<State, String> {
+    fn init(&mut self, gl: &Rc<tinygl::Context>) -> Result<State, String> {
         // Build and bind an empty VAO
         let _vao = unsafe {
             let vao_name = gl.create_vertex_array()?;
@@ -31,13 +33,13 @@ impl tinygl::boilerplate::Demo for Demo {
         };
 
         Ok(State {
-            display_program: shaders::DisplayProgram::build(&gl)?,
-            init_program: shaders::InitProgram::build(&gl)?,
-            opt_program: shaders::OptProgram::build(&gl)?,
+            display_program: GlHandle::new(gl, shaders::DisplayProgram::build(&gl)?),
+            init_program: GlHandle::new(gl, shaders::InitProgram::build(&gl)?),
+            opt_program: GlHandle::new(gl, shaders::OptProgram::build(&gl)?),
         })
     }
 
-    fn render(&mut self, gl: &tinygl::Context, state: &mut State) {
+    fn render(&mut self, gl: &Rc<tinygl::Context>, state: &mut State) {
         unsafe {
             // Clear framebuffer
             gl.clear_color(1.0, 0.0, 1.0, 1.0);
