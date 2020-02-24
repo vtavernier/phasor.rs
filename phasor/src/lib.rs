@@ -20,6 +20,13 @@ pub struct State {
     opt_program: GlHandle<shaders::OptProgram>,
 }
 
+impl Demo {
+    fn set_params(gl: &Rc<tinygl::Context>, program: &impl shaders::SharedUniformSet) {
+        program.set_u_grid_x(&gl, 16);
+        program.set_u_grid_y(&gl, 16);
+    }
+}
+
 impl tinygl::boilerplate::Demo for Demo {
     type State = State;
     type Error = String;
@@ -47,6 +54,7 @@ impl tinygl::boilerplate::Demo for Demo {
 
             // Use the main program
             state.display_program.use_program(gl);
+            Self::set_params(gl, state.display_program.as_ref());
 
             // Draw current program
             gl.draw_arrays(tinygl::gl::TRIANGLES, 0, 3);

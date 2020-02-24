@@ -4,7 +4,7 @@ use rspirv::dr as rr;
 
 use crate::types::*;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Eq, Clone)]
 pub struct FoundUniform {
     pub name: String,
     pub location: u32,
@@ -13,6 +13,20 @@ pub struct FoundUniform {
     pub binding: Option<i32>,
 
     location_name: String,
+}
+
+impl PartialEq for FoundUniform {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.ty == other.ty
+    }
+}
+
+use std::hash::{Hash, Hasher};
+impl Hash for FoundUniform {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.ty.hash(state);
+    }
 }
 
 impl FoundUniform {

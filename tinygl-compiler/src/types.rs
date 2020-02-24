@@ -1,6 +1,6 @@
 use std::fmt;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum AtomType {
     Int,
     Float,
@@ -39,7 +39,7 @@ impl fmt::Display for AtomType {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum VectorType {
     Scalar(AtomType),
     Vector(AtomType, u32),
@@ -83,7 +83,7 @@ impl fmt::Display for VectorType {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum GenericType {
     Atom(AtomType),
     Vector(VectorType),
