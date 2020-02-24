@@ -7,6 +7,8 @@ use std::path::{Path, PathBuf};
 use heck::CamelCase;
 use heck::SnakeCase;
 
+use rspirv::dr as rr;
+
 use crate::{shader_kind::ShaderKindInfo, Error, Result};
 
 #[derive(Debug)]
@@ -487,7 +489,7 @@ impl Compiler {
                     // Extract uniforms from SPIR-V representation
                     if !self.skip_spirv {
                         // Extract uniform data
-                        let mut loader = rspirv::mr::Loader::new();
+                        let mut loader = rr::Loader::new();
                         rspirv::binary::parse_words(binary_result.as_binary(), &mut loader)
                             .expect(&format!("failed to parse binary module for {}", source_path.to_string_lossy()));
                         let module = loader.module();

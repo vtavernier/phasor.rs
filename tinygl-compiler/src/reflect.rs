@@ -1,5 +1,8 @@
-use crate::types::*;
 use heck::SnakeCase;
+
+use rspirv::dr as rr;
+
+use crate::types::*;
 
 #[derive(Debug, Default)]
 pub struct FoundUniform {
@@ -18,7 +21,7 @@ impl FoundUniform {
 
 pub fn find_uniforms(
     shader_path: &str,
-    module: &rspirv::mr::Module,
+    module: &rr::Module,
 ) -> Result<Vec<FoundUniform>, crate::Error> {
     // Find constants
     let mut constants = std::collections::HashMap::new();
@@ -32,13 +35,13 @@ pub fn find_uniforms(
 
         match type_global_value.class.opcode {
             spirv_headers::Op::Constant => {
-                if let rspirv::mr::Operand::LiteralInt32(value) = type_global_value.operands[0] {
+                if let rr::Operand::LiteralInt32(value) = type_global_value.operands[0] {
                     constants.insert(id, value);
                 }
             }
             spirv_headers::Op::TypeInt => {
-                if let rspirv::mr::Operand::LiteralInt32(32) = type_global_value.operands[0] {
-                    if let rspirv::mr::Operand::LiteralInt32(0) = type_global_value.operands[1] {
+                if let rr::Operand::LiteralInt32(32) = type_global_value.operands[0] {
+                    if let rr::Operand::LiteralInt32(0) = type_global_value.operands[1] {
                         types.insert(id, GenericType::Atom(AtomType::UInt));
                     } else {
                         types.insert(id, GenericType::Atom(AtomType::Int));
@@ -48,7 +51,7 @@ pub fn find_uniforms(
                 }
             }
             spirv_headers::Op::TypeFloat => {
-                if let rspirv::mr::Operand::LiteralInt32(32) = type_global_value.operands[0] {
+                if let rr::Operand::LiteralInt32(32) = type_global_value.operands[0] {
                     types.insert(id, GenericType::Atom(AtomType::Float));
                 } else {
                     panic!("unsupported float width");
@@ -59,8 +62,8 @@ pub fn find_uniforms(
                 types.insert(id, GenericType::Atom(AtomType::Bool));
             }
             spirv_headers::Op::TypeVector => {
-                if let rspirv::mr::Operand::IdRef(type_id) = type_global_value.operands[0] {
-                    if let rspirv::mr::Operand::LiteralInt32(components) =
+                if let rr::Operand::IdRef(type_id) = type_global_value.operands[0] {
+                    if let rr::Operand::LiteralInt32(components) =
                         type_global_value.operands[1]
                     {
                         types.insert(id, GenericType::vector(types[&type_id], components));
@@ -68,8 +71,8 @@ pub fn find_uniforms(
                 }
             }
             spirv_headers::Op::TypeArray => {
-                if let rspirv::mr::Operand::IdRef(type_id) = type_global_value.operands[0] {
-                    if let rspirv::mr::Operand::IdRef(constant_id) = type_global_value.operands[1] {
+                if let rr::Operand::IdRef(type_id) = type_global_value.operands[0] {
+                    if let rr::Operand::IdRef(constant_id) = type_global_value.operands[1] {
                         types.insert(
                             id,
                             GenericType::array(types[&type_id], constants[&constant_id]),
@@ -92,8 +95,8 @@ pub fn find_uniforms(
     // Enumerate known names from debug info
     for debug in &module.debugs {
         if let spirv_headers::Op::Name = debug.class.opcode {
-            if let rspirv::mr::Operand::IdRef(id) = debug.operands[0] {
-                if let rspirv::mr::Operand::LiteralString(name) = &debug.operands[1] {
+            if let rr::Operand::IdRef(id) = debug.operands[0] {
+                if let rr::Operand::LiteralString(name) = &debug.operands[1] {
                     names.insert(
                         id,
                         FoundUniform {
@@ -109,11 +112,11 @@ pub fn find_uniforms(
     // Enumerate locations
     for annotation in &module.annotations {
         if let spirv_headers::Op::Decorate = annotation.class.opcode {
-            if let rspirv::mr::Operand::Decoration(spirv_headers::Decoration::Location) =
+            if let rr::Operand::Decoration(spirv_headers::Decoration::Location) =
                 annotation.operands[1]
             {
-                if let rspirv::mr::Operand::IdRef(id) = annotation.operands[0] {
-                    if let rspirv::mr::Operand::LiteralInt32(location) = annotation.operands[2] {
+                if let rr::Operand::IdRef(id) = annotation.operands[0] {
+                    if let rr::Operand::LiteralInt32(location) = annotation.operands[2] {
                         names.get_mut(&id).unwrap().location = location;
                     }
                 }
@@ -127,14 +130,14 @@ pub fn find_uniforms(
     for type_global_value in &module.types_global_values {
         match type_global_value.class.opcode {
             spirv_headers::Op::TypePointer => {
-                if let rspirv::mr::Operand::IdRef(type_id) = type_global_value.operands[1] {
+                if let rr::Operand::IdRef(type_id) = type_global_value.operands[1] {
                     type_pointers.insert(type_global_value.result_id.unwrap(), type_id);
                 } else {
                     panic!("failed to get type_id");
                 }
             }
             spirv_headers::Op::Variable => {
-                if let rspirv::mr::Operand::StorageClass(
+                if let rr::Operand::StorageClass(
                     spirv_headers::StorageClass::UniformConstant,
                 ) = type_global_value.operands[0]
                 {
