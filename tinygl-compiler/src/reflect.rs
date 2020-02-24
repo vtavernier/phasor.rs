@@ -10,6 +10,8 @@ pub struct FoundUniform {
     pub location: u32,
     pub ty: Option<GenericType>,
 
+    pub binding: Option<i32>,
+
     location_name: String,
 }
 
@@ -63,9 +65,7 @@ pub fn find_uniforms(
             }
             spirv_headers::Op::TypeVector => {
                 if let rr::Operand::IdRef(type_id) = type_global_value.operands[0] {
-                    if let rr::Operand::LiteralInt32(components) =
-                        type_global_value.operands[1]
-                    {
+                    if let rr::Operand::LiteralInt32(components) = type_global_value.operands[1] {
                         types.insert(id, GenericType::vector(types[&type_id], components));
                     }
                 }
@@ -83,6 +83,12 @@ pub fn find_uniforms(
                 } else {
                     panic!("failed to get type_id");
                 }
+            }
+            spirv_headers::Op::TypeImage => {
+                // TODO: Store texture details in reflection data?
+                // TODO: Store binding details
+                // TODO: UInt should work instead
+                types.insert(id, GenericType::Atom(AtomType::Int));
             }
             _ => (),
         }
@@ -120,6 +126,14 @@ pub fn find_uniforms(
                         names.get_mut(&id).unwrap().location = location;
                     }
                 }
+            } else if let rr::Operand::Decoration(spirv_headers::Decoration::Binding) =
+                annotation.operands[1]
+            {
+                if let rr::Operand::IdRef(id) = annotation.operands[0] {
+                    if let rr::Operand::LiteralInt32(binding) = annotation.operands[2] {
+                        names.get_mut(&id).unwrap().binding = Some(binding as i32);
+                    }
+                }
             }
         }
     }
@@ -137,9 +151,8 @@ pub fn find_uniforms(
                 }
             }
             spirv_headers::Op::Variable => {
-                if let rr::Operand::StorageClass(
-                    spirv_headers::StorageClass::UniformConstant,
-                ) = type_global_value.operands[0]
+                if let rr::Operand::StorageClass(spirv_headers::StorageClass::UniformConstant) =
+                    type_global_value.operands[0]
                 {
                     let result_id = type_global_value.result_id.unwrap();
                     if let Some(v) = names.get_mut(&result_id) {

@@ -323,9 +323,20 @@ impl Compiler {
         writeln!(wr, "        }}")?;
         writeln!(wr, "    }}")?;
 
-        // Write setter methods
+        // Write getter/setter methods
         for uniform in &wrapped_shader.uniforms {
             let ty = uniform.ty.unwrap();
+
+            if let Some(binding) = uniform.binding {
+                writeln!(
+                    wr,
+                    "    pub fn get_{uniform_sc_name}_binding(&self) -> {type_name} {{",
+                    uniform_sc_name = uniform.name.to_snake_case(),
+                    type_name = ty.rstype()
+                )?;
+                writeln!(wr, "        {}", binding)?;
+                writeln!(wr, "    }}")?;
+            }
 
             writeln!(
                 wr,
