@@ -101,7 +101,10 @@ impl WrappedUniformSet {
             .collect();
 
         // Clone the first set
-        let mut unified = uniform_sets.first().map(Clone::clone).unwrap_or_else(HashSet::new);
+        let mut unified = uniform_sets
+            .first()
+            .map(Clone::clone)
+            .unwrap_or_else(HashSet::new);
         for others in uniform_sets.iter().skip(1) {
             unified = HashSet::from_iter(others.intersection(&unified).map(|x| *x));
         }
@@ -143,9 +146,12 @@ impl WrappedUniformSet {
                     uniform_sc_name = uniform.name.to_snake_case(),
                     type_name = ty.cgmath_name()
                 )?;
-                writeln!(wr, "        {struct_name}::set_{uniform_sc_name}(self, gl, value)",
+                writeln!(
+                    wr,
+                    "        {struct_name}::set_{uniform_sc_name}(self, gl, value)",
                     struct_name = program.program.struct_name(),
-                    uniform_sc_name = uniform.name.to_snake_case())?;
+                    uniform_sc_name = uniform.name.to_snake_case()
+                )?;
                 writeln!(wr, "    }}")?;
             }
 

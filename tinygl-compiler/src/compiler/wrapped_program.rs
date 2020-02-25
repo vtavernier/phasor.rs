@@ -31,7 +31,7 @@ impl WrappedProgram {
             id,
             struct_name,
             rs_file_name,
-            attached_shaders: attached_shaders.iter().map(|n| (*n).to_owned()).collect()
+            attached_shaders: attached_shaders.iter().map(|n| (*n).to_owned()).collect(),
         }
     }
 
@@ -48,7 +48,8 @@ impl WrappedProgram {
         wrapped_shaders: &'a HashMap<PathBuf, WrappedShader>,
     ) -> crate::Result<WrappedProgramUniforms<'a>> {
         // Find wrapped shader details
-        let shaders: std::result::Result<Vec<_>, _> = self.attached_shaders
+        let shaders: std::result::Result<Vec<_>, _> = self
+            .attached_shaders
             .iter()
             .map(|name| {
                 std::fs::canonicalize(name)

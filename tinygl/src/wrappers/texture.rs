@@ -6,7 +6,9 @@ pub struct Texture {
 
 impl Texture {
     pub fn new(gl: &crate::Context) -> Result<Self, String> {
-        Ok(Self { name: unsafe { gl.create_texture() }? })
+        Ok(Self {
+            name: unsafe { gl.create_texture() }?,
+        })
     }
 
     pub fn name(&self) -> <glow::Context as HasContext>::Texture {

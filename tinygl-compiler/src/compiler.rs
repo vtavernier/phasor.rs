@@ -257,7 +257,8 @@ impl Compiler {
         wrapped_program.write_rust_wrapper(&self.dest, uniform_data)?;
 
         // Add to list of wrapped programs
-        self.wrapped_programs.insert(wrapped_program.id().to_owned(), wrapped_program);
+        self.wrapped_programs
+            .insert(wrapped_program.id().to_owned(), wrapped_program);
 
         Ok(())
     }
@@ -266,13 +267,18 @@ impl Compiler {
         let uniform_set = WrappedUniformSet::new(&set_name);
 
         // Resolve programs
-        let uniform_data = uniform_set.resolve_programs(programs, &self.wrapped_programs, &self.wrapped_shaders)?;
+        let uniform_data = uniform_set.resolve_programs(
+            programs,
+            &self.wrapped_programs,
+            &self.wrapped_shaders,
+        )?;
 
         // Prepare Rust wrapper
         uniform_set.write_rust_wrapper(&self.dest, uniform_data)?;
 
         // Add to list of wrapped sets
-        self.wrapped_uniform_sets.insert(uniform_set.id().to_owned(), uniform_set);
+        self.wrapped_uniform_sets
+            .insert(uniform_set.id().to_owned(), uniform_set);
 
         Ok(())
     }

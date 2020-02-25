@@ -14,9 +14,11 @@ impl Default for TargetType {
 impl TargetType {
     pub fn is_source(&self) -> bool {
         match self {
-            TargetType::Automatic => panic!("TargetType::Automatic cannot be classified as source or not"),
+            TargetType::Automatic => {
+                panic!("TargetType::Automatic cannot be classified as source or not")
+            }
             TargetType::Glsl(_) => true,
-            TargetType::SpirV => false
+            TargetType::SpirV => false,
         }
     }
 }

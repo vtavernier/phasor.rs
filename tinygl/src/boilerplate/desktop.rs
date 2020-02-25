@@ -23,7 +23,8 @@ where
         .with_gl(glutin::GlRequest::Specific(glutin::Api::OpenGl, (4, 6)))
         .with_gl_profile(glutin::GlProfile::Core)
         .with_gl_debug_flag(true)
-        .build_windowed(wb, &el).unwrap();
+        .build_windowed(wb, &el)
+        .unwrap();
 
     let (gl, windowed_context) = unsafe {
         let current = windowed_context

@@ -8,8 +8,8 @@ use heck::SnakeCase;
 
 use rspirv::dr as rr;
 
-use crate::shader_kind::ShaderKindInfo;
 use super::TargetType;
+use crate::shader_kind::ShaderKindInfo;
 
 pub struct WrappedShader {
     shader: String,
@@ -79,7 +79,7 @@ impl WrappedShader {
 
     pub fn write_shader(
         &self,
-        dest: impl AsRef<Path>, 
+        dest: impl AsRef<Path>,
         binary_result: &shaderc::CompilationArtifact,
         output_type: TargetType,
         skip_spirv: bool,
@@ -138,7 +138,12 @@ impl WrappedShader {
         Ok(shader_file_name)
     }
 
-    pub fn write_rust_wrapper(&self, dest: impl AsRef<Path>, output_type: TargetType, shader_file_name: &str) -> crate::Result<()> {
+    pub fn write_rust_wrapper(
+        &self,
+        dest: impl AsRef<Path>,
+        output_type: TargetType,
+        shader_file_name: &str,
+    ) -> crate::Result<()> {
         // Write Rust interface code
         let output_rs = File::create(&Path::new(dest.as_ref()).join(&self.rs_file_name)).unwrap();
         let mut wr = BufWriter::new(output_rs);

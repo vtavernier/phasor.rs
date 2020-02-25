@@ -29,7 +29,10 @@ pub struct GlHandle<T: GlDrop> {
 
 impl<T: GlDrop> GlHandle<T> {
     pub fn new(gl: &Rc<crate::Context>, res: T) -> Self {
-        Self { gl: gl.clone(), res }
+        Self {
+            gl: gl.clone(),
+            res,
+        }
     }
 }
 
