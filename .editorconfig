@@ -3,5 +3,5 @@ root = true
 [*]
 indent_style = space
 
-[*.{vert,comp,frag}]
+[*.{vert,comp,frag,glsl,h}]
 indent_size = 4

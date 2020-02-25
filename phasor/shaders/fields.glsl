@@ -41,7 +41,7 @@ layout(location = 33) uniform int u_GlobalSeed;
 // prng
 ///////////////////////////////////////////////
 uint x_;
-uint N = 15487469u;  // seed max value should be a prime number;
+uint N = 15487469u; // seed max value should be a prime number;
 uint hash(uint x) {
     x = ((x >> 16) ^ x) * 0x45d9f3bu;
     x = ((x >> 16) ^ x) * 0x45d9f3bu;
@@ -77,15 +77,8 @@ uint morton(uint x, uint y) {
 
 /// gaussian orientation field
 int _impPerKernel = 20;
-vec3 gaussian(vec2 x, float b) {
-    float a = exp(-M_PI * (b * b) * ((x.x * x.x) + (x.y * x.y)));
-    vec2 d = -2. * M_PI * b * b * x;
-    // Gaussian value, X derivative, Y derivative
-    return a * vec3(1., d.x, d.y);
-}
 
-vec2 cell(ivec2 ij, vec2 uv, float b, uint gseed, float cellsz,
-          out vec4 dnoise) {
+vec2 cell(ivec2 ij, vec2 uv, float b, uint gseed, float cellsz, out vec4 dnoise) {
     uint s = morton(ij.x, ij.y) + 333;
     s = s == 0 ? 1 : s + gseed;
     seed(s);
@@ -111,8 +104,8 @@ vec3 eval_noise(vec2 uv, float b, uint gseed) {
     vec2 _ij = uv / cellsz;
     ivec2 ij = ivec2(_ij);
     vec2 fij = _ij - vec2(ij);
-    vec2 noise = vec2(0.0);   // Complex noise value
-    vec4 dnoise = vec4(0.0);  // Complex noise derivatives (ReX, ImX, ReY, ImY)
+    vec2 noise = vec2(0.0);  // Complex noise value
+    vec4 dnoise = vec4(0.0); // Complex noise derivatives (ReX, ImX, ReY, ImY)
     for (int j = -2; j <= 2; j++) {
         for (int i = -2; i <= 2; i++) {
             ivec2 nij = ivec2(i, j);
@@ -132,8 +125,8 @@ float frequency(vec2 x) {
         return u_MinFrequency;
     } else /* if (u_FrequencyMode == FM_GAUSS) */ {
         vec3 q = eval_noise(x, u_FrequencyBandwidth, u_GlobalSeed + 10);
-        return u_MinFrequency + (u_MaxFrequency - u_MinFrequency) *
-                                    (.5 + .5 * sin(atan(q.y, q.x)));
+        return u_MinFrequency +
+               (u_MaxFrequency - u_MinFrequency) * (.5 + .5 * sin(atan(q.y, q.x)));
     }
 }
 
@@ -143,14 +136,13 @@ float isotropy(vec2 x) {
     } else if (u_IsotropyMode == IM_ISOTROPIC) {
         return u_MaxIsotropy;
     } else if (u_IsotropyMode == IM_RAMP) {
-        return clamp(u_MinIsotropy + (u_MaxIsotropy - u_MinIsotropy) *
-                                         pow(x.x / 32.0, u_IsotropyPower),
+        return clamp(u_MinIsotropy +
+                         (u_MaxIsotropy - u_MinIsotropy) * pow(x.x / 32.0, u_IsotropyPower),
                      0., 1.);
     } else /* if (u_FrequencyMode == IM_GAUSS) */ {
         vec3 q = eval_noise(x, u_IsotropyBandwidth, u_GlobalSeed + 15);
-        return u_MinIsotropy +
-               (u_MaxIsotropy - u_MinIsotropy) *
-                   pow(.5 + .5 * sin(atan(q.y, q.x)), u_IsotropyPower);
+        return u_MinIsotropy + (u_MaxIsotropy - u_MinIsotropy) *
+                                   pow(.5 + .5 * sin(atan(q.y, q.x)), u_IsotropyPower);
     }
 }
 
@@ -190,10 +182,8 @@ float kernelangle(vec2 x, uint kernelId) {
     if (is > 0.) {
         // Hash the kernel ID into a random number
         float rn = 2. * (tofloat(hash(kernelId + u_GlobalSeed))) - 1.;
-        return a + rn * (M_PI * is);  // is == 1 => -Pi, Pi orientation random
+        return a + rn * (M_PI * is); // is == 1 => -Pi, Pi orientation random
     } else {
         return a;
     }
 }
-
-// vim: ft=glsl:fdm=marker:ts=4:sw=4:et

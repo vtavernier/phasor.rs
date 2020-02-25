@@ -1,3 +1,6 @@
+use std::env;
+use std::path::PathBuf;
+
 fn main() {
     let mut compiler = tinygl_compiler::CompilerBuilder::default().build().unwrap();
 
@@ -16,4 +19,16 @@ fn main() {
         .wrap_uniforms(&["init", "display"], "shared")
         .unwrap();
     compiler.write_root_include().unwrap();
+
+    // Generate wrapper for constants
+    println!("cargo:rerun-if-changed=shaders/shared.h");
+    let bindings = bindgen::Builder::default()
+        .header("shaders/shared.h")
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+        .generate()
+        .expect("unable to generate bindings");
+
+    bindings
+        .write_to_file(PathBuf::from(env::var("OUT_DIR").unwrap()).join("shared.rs"))
+        .expect("couldn't write bindings");
 }

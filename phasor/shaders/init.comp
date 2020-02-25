@@ -1,39 +1,28 @@
-#version 460
+#version 460 core
 #extension GL_ARB_shader_image_load_store : enable
 
 #define K int(gl_WorkGroupSize.x)
 #include "shared.h"
-#define M_PI 3.14159265358979323846
 
-layout(local_size_x = 8) in;
+layout(local_size_x = CURRENT_K) in;
 
-layout(location = 0) uniform int u_GridX;
-layout(location = 1) uniform int u_GridY;
+layout(location = 0) uniform ivec3 u_Grid;
 
 layout(location = 2, r32f) coherent uniform imageBuffer u_Kernels;
 
 #include "fields.glsl"
 
-// gl_LocalInvocationID
-// gl_GlobalInvocationID
-// gl_WorkGroupID
-// gl_NumWorkGroups
-// gl_LocalGroupSizeARB
-
 void main() {
-  int gi = int(gl_WorkGroupID.x) % u_GridX;
-  int gj = int(gl_WorkGroupID.x) / u_GridX;
-  vec2 gs = 32.0 / vec2(u_GridX, u_GridY);
-  seed(int(gl_GlobalInvocationID.x) + 1 + u_GlobalSeed);
-  vec2 x = vec2(uni_0_1(), uni_0_1());
-  imageStore(u_Kernels, int(gl_GlobalInvocationID.x * NFLOATS) + 0, vec4(x.x));
-  imageStore(u_Kernels, int(gl_GlobalInvocationID.x * NFLOATS) + 1, vec4(x.y));
-  imageStore(u_Kernels, int(gl_GlobalInvocationID.x * NFLOATS) + 2,
-             vec4(frequency(x + vec2(gi, gj) * gs)));
-  imageStore(u_Kernels, int(gl_GlobalInvocationID.x * NFLOATS) + 3, vec4(0.0f));
-  imageStore(
-      u_Kernels, int(gl_GlobalInvocationID.x * NFLOATS) + 4,
-      vec4(kernelangle(x + vec2(gi, gj) * gs, uint(gl_GlobalInvocationID.x))));
+    int gi = int(gl_WorkGroupID.x) % u_Grid.x;
+    int gj = int(gl_WorkGroupID.x) / u_Grid.x;
+    vec2 gs = 32.0 / vec2(u_Grid.xy);
+    seed(int(gl_GlobalInvocationID.x) + 1 + u_GlobalSeed);
+    vec2 x = vec2(uni_0_1(), uni_0_1());
+    imageStore(u_Kernels, int(gl_GlobalInvocationID.x * NFLOATS) + 0, vec4(x.x));
+    imageStore(u_Kernels, int(gl_GlobalInvocationID.x * NFLOATS) + 1, vec4(x.y));
+    imageStore(u_Kernels, int(gl_GlobalInvocationID.x * NFLOATS) + 2,
+               vec4(frequency(x + vec2(gi, gj) * gs)));
+    imageStore(u_Kernels, int(gl_GlobalInvocationID.x * NFLOATS) + 3, vec4(0.0f));
+    imageStore(u_Kernels, int(gl_GlobalInvocationID.x * NFLOATS) + 4,
+               vec4(kernelangle(x + vec2(gi, gj) * gs, uint(gl_GlobalInvocationID.x))));
 }
-
-// vim: ft=glsl:fdm=marker:ts=2:sw=2:et

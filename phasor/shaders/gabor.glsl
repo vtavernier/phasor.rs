@@ -20,8 +20,7 @@ vec2 phasor(vec2 x, float phi, vec2 wi, float fi
         vec2 dfw = fi * wi - f * w;
         dfw *= fm;
 
-        gaus = exp(-b / (1. + fm * b / a) * dot(x, x)) *
-               exp(-M_PI2 * dot(dfw, dfw) / (a + b));
+        gaus = exp(-b / (1. + fm * b / a) * dot(x, x)) * exp(-M_PI2 * dot(dfw, dfw) / (a + b));
         osc = 2. * M_PI * dot(x, fi * wi + dfw / (1. + b / a)) + phi;
 
     } else
@@ -43,14 +42,14 @@ int cell_margin() {
                             u_FilterBandwidth));
     }
 #endif
-    return 3;
+    return 1;
 }
 
 // 0 = clamp
 // 1 = modulo
 layout(location = 12) uniform int u_CellMode;
 
-int cell_id(int n, int m) {
+int cell_id_(int n, int m) {
     if (u_CellMode == CM_CLAMP) {
         if (n < 0 || n >= m) {
             return -1;
@@ -68,6 +67,6 @@ int cell_id(int n, int m) {
     }
 }
 
-int cell_idx(int ni) { return cell_id(ni, u_GridX); }
-
-int cell_idy(int nj) { return cell_id(nj, u_GridY); }
+int cell_idx(int ni) { return cell_id_(ni, u_Grid.x); }
+int cell_idy(int nj) { return cell_id_(nj, u_Grid.y); }
+int cell_idz(int nk) { return cell_id_(nk, u_Grid.z); }

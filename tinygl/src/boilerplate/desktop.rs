@@ -5,6 +5,8 @@ use glutin::event_loop::{ControlFlow, EventLoop};
 use glutin::window::WindowBuilder;
 use glutin::ContextBuilder;
 
+use super::RenderFlow;
+
 pub fn run_boilerplate<T>(mut demo: T)
 where
     T: super::Demo + 'static,
@@ -23,6 +25,7 @@ where
         .with_gl(glutin::GlRequest::Specific(glutin::Api::OpenGl, (4, 6)))
         .with_gl_profile(glutin::GlProfile::Core)
         .with_gl_debug_flag(true)
+        .with_vsync(true)
         .build_windowed(wb, &el)
         .unwrap();
 
@@ -94,8 +97,6 @@ where
     let mut state = demo.init(&gl).expect("failed to initialize demo");
 
     el.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Wait;
-
         match event {
             Event::LoopDestroyed => return,
             Event::WindowEvent { event, .. } => match event {
@@ -105,8 +106,16 @@ where
             },
             Event::RedrawRequested(_) => {
                 // Render demo
-                demo.render(&gl, &mut state);
-                windowed_context.window().request_redraw();
+                match demo.render(&gl, &mut state) {
+                    RenderFlow::Wait => {
+                        *control_flow = ControlFlow::Wait;
+                    }
+                    RenderFlow::Redraw => {
+                        *control_flow = ControlFlow::Poll;
+                        windowed_context.window().request_redraw();
+                    }
+                }
+
                 windowed_context.swap_buffers().unwrap();
             }
             _ => (),
