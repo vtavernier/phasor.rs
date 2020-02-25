@@ -10,4 +10,3 @@ heck = "0.3.1"
 spirv_cross = { version = "0.17.1", features = ["glsl"] }
 rspirv = { git = "https://github.com/gfx-rs/rspirv.git#3905855" }
 spirv_headers = { git = "https://github.com/gfx-rs/rspirv.git#3905855" }
-itertools = "0.8.2"
