@@ -20,6 +20,8 @@ where
         .with_inner_size(glutin::dpi::LogicalSize::new(768.0, 768.0));
 
     let windowed_context = ContextBuilder::new()
+        .with_gl(glutin::GlRequest::Specific(glutin::Api::OpenGl, (4, 6)))
+        .with_gl_profile(glutin::GlProfile::Core)
         .with_gl_debug_flag(true)
         .build_windowed(wb, &el).unwrap();
 
