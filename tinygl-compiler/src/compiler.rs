@@ -152,6 +152,10 @@ impl Compiler {
             // Set callback
             let mut options = shaderc::CompileOptions::new().unwrap();
 
+            // Add definitions
+            // TODO: Let use configure options?
+            options.add_macro_definition("TINYGL", Some(env!("CARGO_PKG_VERSION_MAJOR")));
+
             // Default to OpenGL targets
             options.set_target_env(shaderc::TargetEnv::OpenGL, 0);
 
