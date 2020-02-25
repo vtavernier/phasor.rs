@@ -10,6 +10,8 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 glow = { git = "https://github.com/grovesNL/glow.git" }
 cgmath = "0.17.0"
+log = "0.4.8"
+env_logger = "0.7.1"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 glutin = "0.23.0"

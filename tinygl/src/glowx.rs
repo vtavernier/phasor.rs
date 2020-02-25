@@ -96,6 +96,41 @@ impl ContextEx {
             format,
         );
     }
+
+    /// Set up a callback for debug messages from the OpenGL driver
+    pub unsafe fn debug_message_callback<F>(&self, callback: F)
+    where
+        F: FnMut(u32, u32, u32, u32, &std::ffi::CStr) + 'static,
+    {
+        self.glx.DebugMessageCallback(
+            Some(tinygl_debug_message_callback::<F>),
+            Box::into_raw(Box::new(callback)) as *const std::ffi::c_void,
+        );
+    }
+}
+
+extern "system" fn tinygl_debug_message_callback<F>(
+    source: u32,
+    message_type: u32,
+    id: u32,
+    severity: u32,
+    length: i32,
+    message: *const i8,
+    user_param: *mut std::ffi::c_void,
+) where
+    F: FnMut(u32, u32, u32, u32, &std::ffi::CStr),
+{
+    unsafe {
+        let callback_ptr = user_param as *mut F;
+        let callback = &mut *callback_ptr;
+
+        let message = &std::ffi::CStr::from_bytes_with_nul_unchecked(std::slice::from_raw_parts(
+            message as *const _,
+            length as usize,
+        ));
+
+        callback(source, message_type, id, severity, message);
+    }
 }
 
 impl std::ops::Deref for ContextEx {
