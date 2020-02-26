@@ -1,5 +1,9 @@
+#[macro_use]
+extern crate log;
+
 use std::rc::Rc;
 
+use tinygl::boilerplate::prelude::*;
 use tinygl::prelude::*;
 use tinygl::wrappers::GlHandle;
 
@@ -12,6 +16,59 @@ pub mod shared;
 #[derive(Default)]
 pub struct Demo {}
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum OptimizationMode {
+    None,
+    Optimize,
+    Average,
+}
+
+impl OptimizationMode {
+    fn as_mode(&self) -> i32 {
+        match self {
+            Self::None => -1,
+            Self::Optimize => shared::OM_OPTIMIZE as i32,
+            Self::Average => shared::OM_AVERAGE as i32,
+        }
+    }
+
+    fn toggle_and_switch(
+        &mut self,
+        active_mode: &mut OptimizationMode,
+        target_mode: OptimizationMode,
+    ) {
+        *active_mode = target_mode;
+        if *self == target_mode {
+            *self = Self::None;
+        } else {
+            *self = target_mode;
+        }
+    }
+
+    fn toggle(&mut self, active_mode: &mut OptimizationMode) {
+        match self {
+            Self::None => *self = *active_mode,
+            Self::Optimize | Self::Average => {
+                *active_mode = *self;
+                *self = Self::None;
+            }
+        }
+    }
+
+    fn is_active(&self) -> bool {
+        match self {
+            Self::None => false,
+            _ => true,
+        }
+    }
+}
+
+impl Default for OptimizationMode {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
 pub struct State {
     display_program: GlHandle<shaders::DisplayProgram>,
     init_program: GlHandle<shaders::InitProgram>,
@@ -19,6 +76,8 @@ pub struct State {
     kernels: GlHandle<tinygl::wrappers::Buffer>,
     kernel_texture: GlHandle<tinygl::wrappers::Texture>,
     grid_size: cgmath::Vector3<i32>,
+    optimizing: OptimizationMode,
+    active_mode: OptimizationMode,
 }
 
 impl State {
@@ -65,6 +124,8 @@ impl tinygl::boilerplate::Demo for Demo {
             kernels: GlHandle::new(gl, tinygl::wrappers::Buffer::new(&gl)?),
             kernel_texture: GlHandle::new(gl, tinygl::wrappers::Texture::new(&gl)?),
             grid_size: cgmath::vec3(16, 16, 1),
+            optimizing: Default::default(),
+            active_mode: OptimizationMode::Optimize,
         };
 
         // Setup buffer storage
@@ -127,20 +188,24 @@ impl tinygl::boilerplate::Demo for Demo {
             gl.clear_color(1.0, 0.0, 1.0, 1.0);
             gl.clear(tinygl::gl::COLOR_BUFFER_BIT);
 
-            // Run one optimization pass
-            state.opt_program.use_program(gl);
-            state
-                .opt_program
-                .set_u_noise_bandwidth(gl, 3.0 / std::f32::consts::PI);
-            state.opt_program.set_u_cell_mode(gl, 0);
-            state.opt_program.set_u_grid(gl, state.grid_size);
-            state.opt_program.set_u_opt_method(gl, shared::OM_AVERAGE as i32);
-            gl.dispatch_compute(
-                (state.grid_size.x * state.grid_size.y * state.grid_size.z) as u32,
-                1,
-                1,
-            );
-            gl.memory_barrier(tinygl::gl::TEXTURE_FETCH_BARRIER_BIT);
+            if state.optimizing.is_active() {
+                // Run one optimization pass
+                state.opt_program.use_program(gl);
+                state
+                    .opt_program
+                    .set_u_noise_bandwidth(gl, 3.0 / std::f32::consts::PI);
+                state.opt_program.set_u_cell_mode(gl, 0);
+                state.opt_program.set_u_grid(gl, state.grid_size);
+                state
+                    .opt_program
+                    .set_u_opt_method(gl, state.optimizing.as_mode());
+                gl.dispatch_compute(
+                    (state.grid_size.x * state.grid_size.y * state.grid_size.z) as u32,
+                    1,
+                    1,
+                );
+                gl.memory_barrier(tinygl::gl::TEXTURE_FETCH_BARRIER_BIT);
+            }
 
             // Use the main program
             state.set_params(gl, state.display_program.as_ref());
@@ -156,6 +221,71 @@ impl tinygl::boilerplate::Demo for Demo {
 
             // Draw current program
             gl.draw_arrays(tinygl::gl::TRIANGLES, 0, 3);
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn run_loop(
+        &mut self,
+        windowed_context: &glutin::WindowedContext<glutin::PossiblyCurrent>,
+        gl: &Rc<tinygl::Context>,
+        state: &mut Self::State,
+        event: glutin::event::Event<()>,
+        _target: &glutin::event_loop::EventLoopWindowTarget<()>,
+        control_flow: &mut glutin::event_loop::ControlFlow,
+    ) {
+        use glutin::event::{Event, WindowEvent};
+        use glutin::event_loop::ControlFlow;
+
+        // Default behavior: wait for events
+        if state.optimizing.is_active() {
+            *control_flow = ControlFlow::Poll;
+        } else {
+            *control_flow = ControlFlow::Wait;
+        }
+
+        match event {
+            Event::LoopDestroyed => return,
+            Event::WindowEvent { event, .. } => match event {
+                WindowEvent::Resized(physical_size) => windowed_context.resize(physical_size),
+                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                WindowEvent::KeyboardInput { input, .. } => {
+                    input.virtual_keycode.map(|key| {
+                        if let glutin::event::ElementState::Pressed = input.state {
+                            match key {
+                                glutin::event::VirtualKeyCode::Space => {
+                                    state.optimizing.toggle(&mut state.active_mode);
+                                }
+                                glutin::event::VirtualKeyCode::A => {
+                                    state.optimizing.toggle_and_switch(
+                                        &mut state.active_mode,
+                                        OptimizationMode::Average,
+                                    );
+                                }
+                                glutin::event::VirtualKeyCode::O => {
+                                    state.optimizing.toggle_and_switch(
+                                        &mut state.active_mode,
+                                        OptimizationMode::Optimize,
+                                    );
+                                }
+                                _ => {}
+                            }
+                        }
+                    });
+                }
+                _ => (),
+            },
+            Event::RedrawRequested(_) => {
+                // Render demo
+                self.render(&gl, state);
+                windowed_context.swap_buffers().unwrap();
+            }
+            Event::RedrawEventsCleared => {
+                if state.optimizing.is_active() {
+                    windowed_context.window().request_redraw();
+                }
+            }
+            _ => (),
         }
     }
 
