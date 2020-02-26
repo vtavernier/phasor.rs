@@ -21,7 +21,7 @@ void main() {
     vec2 gs = 32.0 / vec2(u_Grid.xy);
     int kernelId = int(gl_GlobalInvocationID.x - gl_WorkGroupID.x * K);
 
-    for (uint opt_steps = 0; opt_steps < 1u; ++opt_steps) {
+    for (uint opt_steps = 0; opt_steps < 64u; ++opt_steps) {
         // Prefetch kernels into shared memory
         for (int j = -1; j <= 1; j++) {
             for (int i = -1; i <= 1; i++) {
