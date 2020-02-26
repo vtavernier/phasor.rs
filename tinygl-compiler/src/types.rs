@@ -18,11 +18,17 @@ impl AtomType {
         }
     }
 
-    fn cgmath_name(&self) -> &'static str {
+    fn cgmath_name(&self, coerce_i32: bool) -> &'static str {
         match self {
             Self::Int => "i32",
             Self::Float => "f32",
-            Self::UInt => "u32",
+            Self::UInt => {
+                if coerce_i32 {
+                    "i32"
+                } else {
+                    "u32"
+                }
+            }
             Self::Bool => "bool",
         }
     }
@@ -49,18 +55,24 @@ impl VectorType {
     pub fn cgmath_name(&self) -> String {
         // TODO: Use a formatter
         match self {
-            Self::Scalar(atom_type) => atom_type.cgmath_name().to_owned(),
+            Self::Scalar(atom_type) => atom_type.cgmath_name(false).to_owned(),
             Self::Vector(vector_type, components) => format!(
                 "::cgmath::Vector{}<{}>",
                 components,
-                vector_type.cgmath_name()
+                vector_type.cgmath_name(false)
             ),
         }
     }
 
     pub fn rstype(&self) -> &'static str {
         match self {
-            Self::Scalar(atom_type) | Self::Vector(atom_type, _) => atom_type.cgmath_name(),
+            Self::Scalar(atom_type) | Self::Vector(atom_type, _) => atom_type.cgmath_name(false),
+        }
+    }
+
+    pub fn api_rstype(&self) -> &'static str {
+        match self {
+            Self::Scalar(atom_type) | Self::Vector(atom_type, _) => atom_type.cgmath_name(true),
         }
     }
 
@@ -127,7 +139,7 @@ impl GenericType {
     pub fn cgmath_name(&self) -> String {
         // TODO: Use a formatter
         match self {
-            Self::Atom(atom_type) => atom_type.cgmath_name().to_owned(),
+            Self::Atom(atom_type) => atom_type.cgmath_name(false).to_owned(),
             Self::Vector(vector_type) => vector_type.cgmath_name(),
             Self::Array(inner_type, _size) => format!("&[{}]", inner_type.cgmath_name()),
         }
@@ -135,8 +147,15 @@ impl GenericType {
 
     pub fn rstype(&self) -> &'static str {
         match self {
-            Self::Atom(atom_type) => atom_type.cgmath_name(),
+            Self::Atom(atom_type) => atom_type.cgmath_name(false),
             Self::Vector(vector_type) | Self::Array(vector_type, _) => vector_type.rstype(),
+        }
+    }
+
+    pub fn api_rstype(&self) -> &'static str {
+        match self {
+            Self::Atom(atom_type) => atom_type.cgmath_name(true),
+            Self::Vector(vector_type) | Self::Array(vector_type, _) => vector_type.api_rstype(),
         }
     }
 
@@ -149,15 +168,16 @@ impl GenericType {
 
     pub fn glow_value(&self, name: &str) -> String {
         match self {
+            Self::Atom(AtomType::UInt) => format!("std::mem::transmute(&[{}][..])", name),
             Self::Atom(_) => format!("&[{}]", name),
             Self::Vector(inner_type) => format!(
-                "::std::convert::AsRef::<[{base_ty}; {components}]>::as_ref(&{})",
+                "std::mem::transmute(&::std::convert::AsRef::<[{base_ty}; {components}]>::as_ref(&{})[..])",
                 name,
                 components = self.components(),
                 base_ty = inner_type.rstype()
             ),
             Self::Array(inner_type, size) => format!(
-                "::std::slice::from_raw_parts({name}.as_ptr() as *const {base_ty}, {size})",
+                "std::mem::transmute(::std::slice::from_raw_parts({name}.as_ptr() as *const {base_ty}, {size}))",
                 name = name,
                 size = *size * self.components(),
                 base_ty = inner_type.rstype()

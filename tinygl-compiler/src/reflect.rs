@@ -101,8 +101,7 @@ pub fn find_uniforms(
             spirv_headers::Op::TypeImage => {
                 // TODO: Store texture details in reflection data?
                 // TODO: Store binding details
-                // TODO: UInt should work instead
-                types.insert(id, GenericType::Atom(AtomType::Int));
+                types.insert(id, GenericType::Atom(AtomType::UInt));
             }
             _ => (),
         }

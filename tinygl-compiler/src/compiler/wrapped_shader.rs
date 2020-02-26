@@ -251,7 +251,7 @@ impl WrappedShader {
 
             writeln!(wr, "        unsafe {{ gl.uniform_{components}_{rstype}_slice(self.{location}.as_ref(), {what}) }};",
                 components = ty.components(),
-                rstype = ty.rstype(),
+                rstype = ty.api_rstype(),
                 location = uniform.location_name(),
                 what = ty.glow_value("value"))?;
 
