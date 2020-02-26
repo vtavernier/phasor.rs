@@ -5,16 +5,15 @@ use std::rc::Rc;
 
 use tinygl::boilerplate::prelude::*;
 use tinygl::prelude::*;
-use tinygl::wrappers::GlHandle;
 
 #[cfg(target_arch = "wasm32")]
 mod web;
 
+pub mod phasor;
 pub mod shaders;
 pub mod shared;
 
-#[derive(Default)]
-pub struct Demo {}
+use phasor::*;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum OptimizationMode {
@@ -24,7 +23,7 @@ pub enum OptimizationMode {
 }
 
 impl OptimizationMode {
-    fn as_mode(&self) -> i32 {
+    pub fn as_mode(&self) -> i32 {
         match self {
             Self::None => -1,
             Self::Optimize => shared::OM_OPTIMIZE as i32,
@@ -32,7 +31,7 @@ impl OptimizationMode {
         }
     }
 
-    fn toggle_and_switch(
+    pub fn toggle_and_switch(
         &mut self,
         active_mode: &mut OptimizationMode,
         target_mode: OptimizationMode,
@@ -45,7 +44,7 @@ impl OptimizationMode {
         }
     }
 
-    fn toggle(&mut self, active_mode: &mut OptimizationMode) {
+    pub fn toggle(&mut self, active_mode: &mut OptimizationMode) {
         match self {
             Self::None => *self = *active_mode,
             Self::Optimize | Self::Average => {
@@ -55,7 +54,7 @@ impl OptimizationMode {
         }
     }
 
-    fn is_active(&self) -> bool {
+    pub fn is_active(&self) -> bool {
         match self {
             Self::None => false,
             _ => true,
@@ -69,39 +68,10 @@ impl Default for OptimizationMode {
     }
 }
 
-pub struct State {
-    display_program: GlHandle<shaders::DisplayProgram>,
-    init_program: GlHandle<shaders::InitProgram>,
-    opt_program: GlHandle<shaders::OptProgram>,
-    kernels: GlHandle<tinygl::wrappers::Buffer>,
-    kernel_texture: GlHandle<tinygl::wrappers::Texture>,
-    grid_size: cgmath::Vector3<i32>,
+#[derive(Default)]
+pub struct Demo {
     optimizing: OptimizationMode,
     active_mode: OptimizationMode,
-}
-
-impl State {
-    fn set_params(
-        &self,
-        gl: &Rc<tinygl::Context>,
-        program: &(impl shaders::SharedUniformSet + ProgramCommon),
-    ) {
-        program.use_program(gl);
-        program.set_u_angle_bandwidth(&gl, 0.1);
-        program.set_u_angle_mode(&gl, shared::AM_GAUSS as i32);
-        program.set_u_angle_range(&gl, 2.0f32 * std::f32::consts::PI);
-        program.set_u_frequency_bandwidth(&gl, 0.1);
-        program.set_u_frequency_mode(&gl, shared::FM_STATIC as i32);
-        program.set_u_global_seed(&gl, 0);
-        program.set_u_grid(&gl, self.grid_size);
-        program.set_u_isotropy_bandwidth(&gl, 0.1);
-        program.set_u_isotropy_mode(&gl, 0);
-        program.set_u_isotropy_power(&gl, 2.0);
-        program.set_u_max_frequency(&gl, 60.0 / 32.0);
-        program.set_u_min_frequency(&gl, 60.0 / 32.0);
-        program.set_u_max_isotropy(&gl, 1.0);
-        program.set_u_min_isotropy(&gl, 0.0);
-    }
 }
 
 impl tinygl::boilerplate::Demo for Demo {
@@ -116,70 +86,7 @@ impl tinygl::boilerplate::Demo for Demo {
             vao_name
         };
 
-        // Build demo state
-        let state = State {
-            display_program: GlHandle::new(gl, shaders::DisplayProgram::build(&gl)?),
-            init_program: GlHandle::new(gl, shaders::InitProgram::build(&gl)?),
-            opt_program: GlHandle::new(gl, shaders::OptProgram::build(&gl)?),
-            kernels: GlHandle::new(gl, tinygl::wrappers::Buffer::new(&gl)?),
-            kernel_texture: GlHandle::new(gl, tinygl::wrappers::Texture::new(&gl)?),
-            grid_size: cgmath::vec3(16, 16, 1),
-            optimizing: Default::default(),
-            active_mode: OptimizationMode::Optimize,
-        };
-
-        // Setup buffer storage
-        unsafe {
-            gl.bind_buffer(tinygl::gl::TEXTURE_BUFFER, Some(state.kernels.name()));
-            // NFLOATS * sizeof(float) * GridX * GridY * K
-            gl.buffer_storage(
-                tinygl::gl::TEXTURE_BUFFER,
-                (shared::NFLOATS as usize
-                    * std::mem::size_of::<f32>()
-                    * (state.grid_size.x * state.grid_size.y * state.grid_size.z) as usize
-                    * shared::CURRENT_K as usize) as i32,
-                None,
-                tinygl::gl::MAP_READ_BIT,
-            );
-            gl.bind_buffer(tinygl::gl::TEXTURE_BUFFER, None);
-        }
-
-        // Setup texture for buffer storage
-        unsafe {
-            gl.bind_texture(
-                tinygl::gl::TEXTURE_BUFFER,
-                Some(state.kernel_texture.name()),
-            );
-            gl.tex_buffer(
-                tinygl::gl::TEXTURE_BUFFER,
-                tinygl::gl::R32F,
-                state.kernels.name(),
-            );
-            gl.bind_image_texture(
-                0, // TODO get_u_kernels_binding
-                state.kernel_texture.name(),
-                0,
-                false,
-                0,
-                tinygl::gl::READ_WRITE,
-                tinygl::gl::R32F,
-            );
-        }
-
-        // Initialize kernels
-        state.set_params(gl, state.init_program.as_ref());
-
-        unsafe {
-            // Dispatch program
-            gl.dispatch_compute(
-                (state.grid_size.x * state.grid_size.y * state.grid_size.z) as u32,
-                1,
-                1,
-            );
-            gl.memory_barrier(tinygl::gl::ALL_BARRIER_BITS);
-        }
-
-        Ok(state)
+        State::new(gl)
     }
 
     fn render(&mut self, gl: &Rc<tinygl::Context>, state: &mut State) {
@@ -188,39 +95,11 @@ impl tinygl::boilerplate::Demo for Demo {
             gl.clear_color(1.0, 0.0, 1.0, 1.0);
             gl.clear(tinygl::gl::COLOR_BUFFER_BIT);
 
-            if state.optimizing.is_active() {
-                // Run one optimization pass
-                state.opt_program.use_program(gl);
-                state
-                    .opt_program
-                    .set_u_noise_bandwidth(gl, 3.0 / std::f32::consts::PI);
-                state.opt_program.set_u_cell_mode(gl, 0);
-                state.opt_program.set_u_grid(gl, state.grid_size);
-                state
-                    .opt_program
-                    .set_u_opt_method(gl, state.optimizing.as_mode());
-                gl.dispatch_compute(
-                    (state.grid_size.x * state.grid_size.y * state.grid_size.z) as u32,
-                    1,
-                    1,
-                );
-                gl.memory_barrier(tinygl::gl::TEXTURE_FETCH_BARRIER_BIT);
+            if self.optimizing.is_active() {
+                state.run_optimize(gl, self.optimizing);
             }
 
-            // Use the main program
-            state.set_params(gl, state.display_program.as_ref());
-            state.display_program.set_u_filter_modulation(gl, 2.0);
-            state.display_program.set_u_filter_mod_power(gl, 2.0);
-            state.display_program.set_u_isotropy_modulation(gl, 2.0);
-            state
-                .display_program
-                .set_u_noise_bandwidth(gl, 3.0 / std::f32::consts::PI);
-            state
-                .display_program
-                .set_u_filter_bandwidth(gl, 0.0 / std::f32::consts::PI);
-
-            // Draw current program
-            gl.draw_arrays(tinygl::gl::TRIANGLES, 0, 3);
+            state.run_display(gl);
         }
     }
 
@@ -238,7 +117,7 @@ impl tinygl::boilerplate::Demo for Demo {
         use glutin::event_loop::ControlFlow;
 
         // Default behavior: wait for events
-        if state.optimizing.is_active() {
+        if self.optimizing.is_active() {
             *control_flow = ControlFlow::Poll;
         } else {
             *control_flow = ControlFlow::Wait;
@@ -254,17 +133,17 @@ impl tinygl::boilerplate::Demo for Demo {
                         if let glutin::event::ElementState::Pressed = input.state {
                             match key {
                                 glutin::event::VirtualKeyCode::Space => {
-                                    state.optimizing.toggle(&mut state.active_mode);
+                                    self.optimizing.toggle(&mut self.active_mode);
                                 }
                                 glutin::event::VirtualKeyCode::A => {
-                                    state.optimizing.toggle_and_switch(
-                                        &mut state.active_mode,
+                                    self.optimizing.toggle_and_switch(
+                                        &mut self.active_mode,
                                         OptimizationMode::Average,
                                     );
                                 }
                                 glutin::event::VirtualKeyCode::O => {
-                                    state.optimizing.toggle_and_switch(
-                                        &mut state.active_mode,
+                                    self.optimizing.toggle_and_switch(
+                                        &mut self.active_mode,
                                         OptimizationMode::Optimize,
                                     );
                                 }
@@ -281,7 +160,7 @@ impl tinygl::boilerplate::Demo for Demo {
                 windowed_context.swap_buffers().unwrap();
             }
             Event::RedrawEventsCleared => {
-                if state.optimizing.is_active() {
+                if self.optimizing.is_active() {
                     windowed_context.window().request_redraw();
                 }
             }
