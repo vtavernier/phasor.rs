@@ -1,6 +1,5 @@
 use std::rc::Rc;
 
-use tinygl::boilerplate::RenderFlow;
 use tinygl::prelude::*;
 use tinygl::wrappers::GlHandle;
 
@@ -122,7 +121,7 @@ impl tinygl::boilerplate::Demo for Demo {
         Ok(state)
     }
 
-    fn render(&mut self, gl: &Rc<tinygl::Context>, state: &mut State) -> RenderFlow {
+    fn render(&mut self, gl: &Rc<tinygl::Context>, state: &mut State) {
         unsafe {
             // Clear framebuffer
             gl.clear_color(1.0, 0.0, 1.0, 1.0);
@@ -158,8 +157,6 @@ impl tinygl::boilerplate::Demo for Demo {
             // Draw current program
             gl.draw_arrays(tinygl::gl::TRIANGLES, 0, 3);
         }
-
-        RenderFlow::Redraw
     }
 
     fn title(&self) -> String {

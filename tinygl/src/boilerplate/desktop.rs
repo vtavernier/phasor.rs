@@ -1,11 +1,8 @@
 use std::rc::Rc;
 
-use glutin::event::{Event, WindowEvent};
-use glutin::event_loop::{ControlFlow, EventLoop};
+use glutin::event_loop::EventLoop;
 use glutin::window::WindowBuilder;
 use glutin::ContextBuilder;
-
-use super::RenderFlow;
 
 pub fn run_boilerplate<T>(mut demo: T)
 where
@@ -96,29 +93,14 @@ where
     // Initialize demo
     let mut state = demo.init(&gl).expect("failed to initialize demo");
 
-    el.run(move |event, _, control_flow| {
-        match event {
-            Event::LoopDestroyed => return,
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::Resized(physical_size) => windowed_context.resize(physical_size),
-                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                _ => (),
-            },
-            Event::RedrawRequested(_) => {
-                // Render demo
-                match demo.render(&gl, &mut state) {
-                    RenderFlow::Wait => {
-                        *control_flow = ControlFlow::Wait;
-                    }
-                    RenderFlow::Redraw => {
-                        *control_flow = ControlFlow::Poll;
-                        windowed_context.window().request_redraw();
-                    }
-                }
-
-                windowed_context.swap_buffers().unwrap();
-            }
-            _ => (),
-        }
+    el.run(move |event, target, control_flow| {
+        demo.run_loop(
+            &windowed_context,
+            &gl,
+            &mut state,
+            event,
+            target,
+            control_flow,
+        );
     });
 }
