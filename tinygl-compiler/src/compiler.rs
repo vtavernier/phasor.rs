@@ -204,7 +204,11 @@ impl Compiler {
 
             match compiler_result {
                 Ok(binary_result) => {
-                    // TODO: Show compilation warnings from binary_result
+                    if binary_result.get_num_warnings() > 0 {
+                        for l in binary_result.get_warning_messages().lines() {
+                            println!("cargo:warning={}", l);
+                        }
+                    }
 
                     // Base name to identify this shader
                     let mut wrapped_shader = WrappedShader::new(&shader, kind, &source_path);
