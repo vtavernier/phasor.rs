@@ -135,6 +135,7 @@ impl tinygl::boilerplate::Demo for Demo {
                 .set_u_noise_bandwidth(gl, 3.0 / std::f32::consts::PI);
             state.opt_program.set_u_cell_mode(gl, 0);
             state.opt_program.set_u_grid(gl, state.grid_size);
+            state.opt_program.set_u_opt_method(gl, shared::OM_AVERAGE as i32);
             gl.dispatch_compute(
                 (state.grid_size.x * state.grid_size.y * state.grid_size.z) as u32,
                 1,
