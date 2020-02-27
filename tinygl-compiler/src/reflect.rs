@@ -87,10 +87,17 @@ pub fn find_uniforms(
             spirv_headers::Op::TypeArray => {
                 if let rr::Operand::IdRef(type_id) = type_global_value.operands[0] {
                     if let rr::Operand::IdRef(constant_id) = type_global_value.operands[1] {
-                        types.insert(
-                            id,
-                            GenericType::array(types[&type_id], constants[&constant_id]),
-                        );
+                        if types.get(&type_id).is_some() {
+                            types.insert(
+                                id,
+                                GenericType::array(types[&type_id], constants[&constant_id]),
+                            );
+                        } else {
+                            println!(
+                                "cargo:warning=failed to discover array element type for {}",
+                                type_id
+                            );
+                        }
                     } else {
                         panic!("failed to get components");
                     }
