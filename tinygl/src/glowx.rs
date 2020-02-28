@@ -15,14 +15,66 @@ pub struct ContextEx {
 }
 
 impl ContextEx {
-    pub fn from_loader_function<F>(loader_function: F) -> Self
+    pub unsafe fn from_loader_function<F>(loader_function: F) -> Self
     where
         F: FnMut(&str) -> *const std::os::raw::c_void + Clone,
     {
-        Self {
+        let gl = Self {
             ctx: glow::Context::from_loader_function(loader_function.clone()),
             glx: gl::Gl::load_with(loader_function),
-        }
+        };
+
+        // Setup logging on the context
+        gl.debug_message_callback(|source, message_type, id, severity, message| {
+            use crate::gl as Gl;
+            let source = match source {
+                Gl::DEBUG_SOURCE_API => "opengl::api",
+                Gl::DEBUG_SOURCE_WINDOW_SYSTEM => "opengl::window_system",
+                Gl::DEBUG_SOURCE_SHADER_COMPILER => "opengl::shader_compiler",
+                Gl::DEBUG_SOURCE_THIRD_PARTY => "opengl::third_party",
+                Gl::DEBUG_SOURCE_APPLICATION => "opengl::application",
+                Gl::DEBUG_SOURCE_OTHER => "opengl::other",
+                _ => "opengl::unknown",
+            };
+
+            let level = match severity {
+                Gl::DEBUG_SEVERITY_HIGH => log::Level::Error,
+                Gl::DEBUG_SEVERITY_MEDIUM => log::Level::Warn,
+                Gl::DEBUG_SEVERITY_LOW => log::Level::Info,
+                Gl::DEBUG_SEVERITY_NOTIFICATION => log::Level::Debug,
+                _ => log::Level::Trace,
+            };
+
+            let message_type = match message_type {
+                Gl::DEBUG_TYPE_ERROR => "error",
+                Gl::DEBUG_TYPE_DEPRECATED_BEHAVIOR => "deprecated behavior",
+                Gl::DEBUG_TYPE_UNDEFINED_BEHAVIOR => "undefined behavior",
+                Gl::DEBUG_TYPE_PORTABILITY => "portability",
+                Gl::DEBUG_TYPE_PERFORMANCE => "performance",
+                Gl::DEBUG_TYPE_MARKER => "marker",
+                Gl::DEBUG_TYPE_PUSH_GROUP => "push group",
+                Gl::DEBUG_TYPE_POP_GROUP => "pop group",
+                Gl::DEBUG_TYPE_OTHER => "other",
+                _ => "unknown",
+            };
+
+            // Create record manually so we can override the module path
+            log::logger().log(
+                &log::Record::builder()
+                    .args(format_args!(
+                        "{} ({}): {}",
+                        message_type,
+                        id,
+                        message.to_string_lossy()
+                    ))
+                    .level(level)
+                    .target("opengl")
+                    .module_path_static(Some(source))
+                    .build(),
+            );
+        });
+
+        gl
     }
 
     pub unsafe fn shader_binary(

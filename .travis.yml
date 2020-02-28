@@ -1,20 +1,17 @@
 language: rust
 rust:
 - stable
-before_install:
-- nvm install 12.16.1
-- npm i -g wasm-pack
 cache:
   cargo: true
   pip: true
 script:
-- "(cd phasor && wasm-pack build)"
-- "(cd phasor/www && npm ci && npm run build)"
+- cargo test
 after_success: |
   [ $TRAVIS_BRANCH = master ] &&
   [ $TRAVIS_PULL_REQUEST = false ] &&
   pip install --user ghp-import &&
-  ghp-import -n phasor/www/dist &&
+  cargo doc --no-deps &&
+  ghp-import -n target/doc &&
   git push -fq https://${GH_TOKEN}@github.com/${TRAVIS_REPO_SLUG}.git gh-pages
 env:
   global:

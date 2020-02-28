@@ -1,14 +1,13 @@
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) mod glowx;
 
-pub mod boilerplate;
-
 mod context;
 pub use context::*;
 
 pub mod gl;
 pub mod wrappers;
 
+pub use cgmath;
 pub use glow;
 
 pub mod prelude {

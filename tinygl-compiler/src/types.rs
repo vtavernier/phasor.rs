@@ -57,7 +57,7 @@ impl VectorType {
         match self {
             Self::Scalar(atom_type) => atom_type.cgmath_name(false).to_owned(),
             Self::Vector(vector_type, components) => format!(
-                "::cgmath::Vector{}<{}>",
+                "::tinygl::cgmath::Vector{}<{}>",
                 components,
                 vector_type.cgmath_name(false)
             ),
