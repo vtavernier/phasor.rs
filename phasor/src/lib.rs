@@ -500,13 +500,18 @@ impl State {
         let new_gsz = (32.0f32 / ((-(0.05f32.ln())).sqrt() / noise_bandwidth)).ceil() as i32;
 
         // TODO: Variable kernel count support
-        if new_gsz != self.grid_size.x {
+        if new_gsz != self.grid_size.x || kernel_count != shared::CURRENT_K as i32 {
             if kernel_count != shared::CURRENT_K as i32 {
                 warn!(
                     "variable kernel count not supported yet, current: {}, requested: {}",
                     shared::CURRENT_K,
                     kernel_count
                 );
+            }
+
+            if new_gsz == self.grid_size.x {
+                // Nothing to do for now, variable kernel count not supported
+                return;
             }
 
             info!(
