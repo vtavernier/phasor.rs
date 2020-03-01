@@ -94,9 +94,13 @@ struct TextureRenderTarget {
 }
 
 impl TextureRenderTarget {
-    fn new(gl: &Rc<tinygl::Context>) -> Result<TextureRenderTarget, String> {
+    fn new(
+        gl: &Rc<tinygl::Context>,
+        width: u32,
+        height: u32,
+    ) -> Result<TextureRenderTarget, String> {
         // Create objects
-        let this = Self {
+        let mut this = Self {
             framebuffer: GlHandle::new(gl, tinygl::wrappers::Framebuffer::new(gl)?),
             depthbuffer: GlHandle::new(gl, tinygl::wrappers::Renderbuffer::new(gl)?),
             texture_main: GlHandle::new(gl, tinygl::wrappers::Texture::new(gl)?),
@@ -104,12 +108,23 @@ impl TextureRenderTarget {
             current_size: None,
         };
 
+        // Initial allocation
+        this.alloc(gl, width, height);
+
         // Don't use mipmaps
         unsafe {
             for tex in [&this.texture_main, &this.texture_extra].iter() {
                 tex.bind(gl, tinygl::gl::TEXTURE_2D);
-                gl.tex_parameter_i32(tinygl::gl::TEXTURE_2D, tinygl::gl::TEXTURE_MIN_FILTER, tinygl::gl::NEAREST as i32);
-                gl.tex_parameter_i32(tinygl::gl::TEXTURE_2D, tinygl::gl::TEXTURE_MAG_FILTER, tinygl::gl::NEAREST as i32);
+                gl.tex_parameter_i32(
+                    tinygl::gl::TEXTURE_2D,
+                    tinygl::gl::TEXTURE_MIN_FILTER,
+                    tinygl::gl::NEAREST as i32,
+                );
+                gl.tex_parameter_i32(
+                    tinygl::gl::TEXTURE_2D,
+                    tinygl::gl::TEXTURE_MAG_FILTER,
+                    tinygl::gl::NEAREST as i32,
+                );
             }
 
             gl.bind_texture(tinygl::gl::TEXTURE_2D, None);
@@ -417,8 +432,10 @@ impl State {
         // Prepare render target
         let trt = {
             if self.texture_render_target.is_none() {
-                self.texture_render_target =
-                    Some(TextureRenderTarget::new(gl).expect("failed to create render target"));
+                self.texture_render_target = Some(
+                    TextureRenderTarget::new(gl, width, height)
+                        .expect("failed to create render target"),
+                );
             }
 
             self.texture_render_target.as_mut().unwrap()
@@ -492,8 +509,10 @@ impl State {
                 );
             }
 
-            info!("reallocating for kernel_count: {}, width: {}, noise_bandwidth: {}, new_gsz: {}",
-                kernel_count, width, noise_bandwidth, new_gsz);
+            info!(
+                "reallocating for kernel_count: {}, width: {}, noise_bandwidth: {}, new_gsz: {}",
+                kernel_count, width, noise_bandwidth, new_gsz
+            );
 
             // Update allocated grid size
             self.grid_size = cgmath::vec3(new_gsz, new_gsz, 1);
