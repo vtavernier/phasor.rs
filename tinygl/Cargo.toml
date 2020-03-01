@@ -8,7 +8,7 @@ edition = "2018"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-glow = { git = "https://github.com/grovesNL/glow.git" }
+glow = { git = "https://github.com/vtavernier/glow.git", branch = "dev" }
 cgmath = "0.17.0"
 log = "0.4.8"
 backtrace = "0.3.44"
