@@ -62,10 +62,15 @@ impl ContextEx {
             log::logger().log(
                 &log::Record::builder()
                     .args(format_args!(
-                        "{} ({}): {}",
+                        "{} ({}): {}{}",
                         message_type,
                         id,
-                        message.to_string_lossy()
+                        message.to_string_lossy(),
+                        if level == log::Level::Warn || level == log::Level::Error {
+                            format!(", stack backtrace:\n{:?}", backtrace::Backtrace::new())
+                        } else {
+                            "".to_owned()
+                        }
                     ))
                     .level(level)
                     .target("opengl")
