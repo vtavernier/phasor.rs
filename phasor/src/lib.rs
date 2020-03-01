@@ -6,6 +6,7 @@ use std::rc::Rc;
 use tinygl::prelude::*;
 use tinygl::wrappers::GlHandle;
 
+pub mod api;
 pub mod shaders;
 pub mod shared;
 
