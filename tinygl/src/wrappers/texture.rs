@@ -14,6 +14,10 @@ impl Texture {
     pub fn name(&self) -> <glow::Context as HasContext>::Texture {
         self.name
     }
+
+    pub fn bind(&self, gl: &crate::Context, target: u32) {
+        unsafe { gl.bind_texture(target, Some(self.name)) };
+    }
 }
 
 impl super::GlDrop for Texture {

@@ -5,6 +5,12 @@ use std::rc::Rc;
 mod buffer;
 pub use buffer::*;
 
+mod framebuffer;
+pub use framebuffer::*;
+
+mod renderbuffer;
+pub use renderbuffer::*;
+
 mod shader;
 pub use shader::*;
 

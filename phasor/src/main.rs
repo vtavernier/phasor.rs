@@ -47,6 +47,8 @@ fn main() -> Result<(), String> {
 
     // Initialize demo
     let state = State::new(&gl).expect("failed to initialize state");
+    let params = Params::default();
+    state.run_init(&gl, &params);
 
     // Optimization modes
     let mut optimizing = OptimizationMode::None;
@@ -128,10 +130,10 @@ fn main() -> Result<(), String> {
                     gl.clear(tinygl::gl::COLOR_BUFFER_BIT);
 
                     if optimizing.is_active() {
-                        state.run_optimize(&gl, optimizing);
+                        state.run_optimize(&gl, optimizing, 1, &params);
                     }
 
-                    state.run_display(&gl);
+                    state.run_display(&gl, &params, shared::DM_NOISE as i32);
                 }
 
                 windowed_context.swap_buffers().unwrap();
