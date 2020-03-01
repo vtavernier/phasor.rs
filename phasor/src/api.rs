@@ -37,8 +37,18 @@ struct ApiState {
 }
 
 impl ApiState {
+    #[cfg(target_os = "linux")]
+    fn get_event_loop() -> EventLoop<()> {
+        glutin::platform::unix::EventLoopExtUnix::new_any_thread()
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn get_event_loop() -> EventLoop<()> {
+        EventLoop::new()
+    }
+
     fn new() -> Result<Self, String> {
-        let el = EventLoop::new();
+        let el = Self::get_event_loop();
 
         let sz = glutin::dpi::PhysicalSize::new(512, 512);
 
@@ -88,7 +98,7 @@ impl ApiContext {
     fn ensure_init(&mut self) -> &mut ApiState {
         match self {
             Self::Unintialized => {
-                env_logger::init();
+                env_logger::try_init().ok();
                 *self = Self::Ready(ApiState::new().expect("failed to initialize api"));
             }
             _ => {}
@@ -293,4 +303,43 @@ pub extern "C" fn pg_set_kernels(
 ) -> bool {
     // TODO: Kernel buffer access
     false
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn pg_optimize_ex() {
+        super::pg_init(true);
+
+        let params = crate::Params::default();
+        super::pg_optimize_ex(
+            512,
+            512,
+            crate::shared::CURRENT_K as i32,
+            params.global_seed,
+            4,
+            params.angle_mode,
+            params.angle_offset,
+            params.angle_bandwidth,
+            params.angle_range,
+            params.frequency_mode,
+            params.min_frequency,
+            params.max_frequency,
+            params.frequency_bandwidth,
+            params.noise_bandwidth,
+            params.filter_bandwidth,
+            params.filter_modulation,
+            params.filter_mod_power,
+            params.isotropy_mode,
+            params.min_isotropy,
+            params.max_isotropy,
+            params.isotropy_bandwidth,
+            params.isotropy_modulation,
+            params.isotropy_power,
+            params.cell_mode,
+            crate::shared::OM_AVERAGE as i32,
+            crate::shared::DM_NOISE as i32,
+            true,
+        );
+    }
 }
