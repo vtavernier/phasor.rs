@@ -5,7 +5,7 @@ cache:
   cargo: true
   pip: true
 script:
-- cargo test
+- cargo build --release --verbose
 after_success: |
   [ $TRAVIS_BRANCH = master ] &&
   [ $TRAVIS_PULL_REQUEST = false ] &&
