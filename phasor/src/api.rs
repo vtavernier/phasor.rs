@@ -30,8 +30,10 @@ struct ApiState {
     state: State,
     last_error: Option<CString>,
     grid_size: cgmath::Vector3<i32>,
+    kernel_count: i32,
     buffer_main: Vec<f32>,
     buffer_extra: Vec<f32>,
+    buffer_kernels: Vec<f32>,
 }
 
 impl ApiState {
@@ -85,9 +87,11 @@ impl ApiState {
             gl,
             state,
             last_error: None,
-            grid_size: cgmath::vec3(16, 16, 1),
+            grid_size: cgmath::vec3(0, 0, 0),
+            kernel_count: 0,
             buffer_main: Vec::new(),
             buffer_extra: Vec::new(),
+            buffer_kernels: Vec::new(),
         })
     }
 }
@@ -194,6 +198,10 @@ pub extern "C" fn pg_optimize_ex(
         grid_size: Params::compute_grid_size(noise_bandwidth),
     };
 
+    // Remember grid size change
+    api_state.grid_size = params.grid_size;
+    api_state.kernel_count = params.kernel_count as i32;
+
     let mode = OptimizationMode::from(opt_method);
 
     if init_kernels {
@@ -204,6 +212,7 @@ pub extern "C" fn pg_optimize_ex(
         state.run_optimize(&api_state.gl, mode, iterations as u32, &params);
     }
 
+    // TODO: Errors could happen here
     state.render_to_texture(
         &api_state.gl,
         width as u32,
@@ -288,8 +297,40 @@ pub extern "C" fn pg_get_kernels(
     grid_y: &mut i32,
     kernel_count: &mut i32,
 ) -> *const Kernel {
-    // TODO: Kernel buffer access
-    std::ptr::null()
+    unsafe {
+        CURRENT_CONTEXT
+            .if_init()
+            .and_then(|api_state| {
+                *grid_x = api_state.grid_size.x;
+                *grid_y = api_state.grid_size.y;
+                *kernel_count = api_state.kernel_count;
+
+                // Allocate CPU-side buffer that's large enough
+                let target_size =
+                    (super::shared::NFLOATS as i32 * *grid_x * *grid_y * *kernel_count) as usize;
+                if api_state.buffer_kernels.len() < target_size {
+                    api_state.buffer_kernels.resize(target_size, 0.0);
+                }
+
+                // Bind buffer
+                let buf = api_state.state.kernels_buffer();
+                buf.bind(&api_state.gl, tinygl::gl::COPY_READ_BUFFER);
+                // Copy data to CPU
+                api_state.gl.get_buffer_sub_data(
+                    tinygl::gl::COPY_READ_BUFFER,
+                    0,
+                    std::slice::from_raw_parts_mut(
+                        api_state.buffer_kernels.as_mut_ptr() as *mut u8,
+                        target_size * std::mem::size_of::<f32>(),
+                    ),
+                );
+                // Unbind buffer
+                api_state.gl.bind_buffer(tinygl::gl::COPY_READ_BUFFER, None);
+
+                Some(api_state.buffer_kernels.as_ptr() as *const _)
+            })
+            .unwrap_or(std::ptr::null())
+    }
 }
 
 #[no_mangle]
@@ -299,8 +340,34 @@ pub extern "C" fn pg_set_kernels(
     grid_y: i32,
     kernel_count: i32,
 ) -> bool {
-    // TODO: Kernel buffer access
-    false
+    unsafe {
+        CURRENT_CONTEXT
+            .if_init()
+            .and_then(|api_state| {
+                api_state.grid_size = cgmath::vec3(grid_x, grid_y, 1);
+                api_state.kernel_count = kernel_count;
+
+                // Bind buffer
+                let buf = api_state.state.kernels_buffer();
+                buf.bind(&api_state.gl, tinygl::gl::COPY_WRITE_BUFFER);
+                // Copy data to CPU
+                api_state.gl.buffer_data_u8_slice(
+                    tinygl::gl::COPY_WRITE_BUFFER,
+                    std::slice::from_raw_parts(
+                        kernels as *const u8,
+                        std::mem::size_of::<Kernel>() * (grid_x * grid_y * kernel_count) as usize,
+                    ),
+                    tinygl::gl::DYNAMIC_DRAW,
+                );
+                // Unbind buffer
+                api_state
+                    .gl
+                    .bind_buffer(tinygl::gl::COPY_WRITE_BUFFER, None);
+
+                Some(true)
+            })
+            .unwrap_or(false)
+    }
 }
 
 #[cfg(test)]

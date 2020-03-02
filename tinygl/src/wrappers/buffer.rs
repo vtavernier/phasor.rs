@@ -14,6 +14,10 @@ impl Buffer {
     pub fn name(&self) -> <glow::Context as HasContext>::Buffer {
         self.name
     }
+
+    pub fn bind(&self, gl: &crate::Context, target: u32) {
+        unsafe { gl.bind_buffer(target, Some(self.name)) };
+    }
 }
 
 impl super::GlDrop for Buffer {

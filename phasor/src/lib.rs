@@ -291,4 +291,8 @@ impl State {
 
         Ok(())
     }
+
+    pub fn kernels_buffer(&self) -> &tinygl::wrappers::Buffer {
+        &self.kernels
+    }
 }
