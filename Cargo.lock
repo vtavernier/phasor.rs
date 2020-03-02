@@ -435,7 +435,7 @@ checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
 [[package]]
 name = "glow"
 version = "0.4.0"
-source = "git+https://github.com/vtavernier/glow.git?branch=dev#93790347248ab87d5f52112de84fce09922f2cb8"
+source = "git+https://github.com/vtavernier/glow.git?rev=d3ecf4c#d3ecf4c387989858a1bc162b4e222ea5e4498492"
 dependencies = [
  "gl_generator 0.13.1",
  "js-sys",
@@ -1030,7 +1030,7 @@ checksum = "b28dfe3fe9badec5dbf0a79a9cccad2cfc2ab5484bdb3e44cbd1ae8b3ba2be06"
 [[package]]
 name = "rspirv"
 version = "0.5.4"
-source = "git+https://github.com/gfx-rs/rspirv.git#3905855#39058551b3bb2340d8c4d2d1da3fcccc6b197080"
+source = "git+https://github.com/gfx-rs/rspirv.git?rev=3905855#39058551b3bb2340d8c4d2d1da3fcccc6b197080"
 dependencies = [
  "derive_more",
  "fxhash",
@@ -1200,7 +1200,7 @@ dependencies = [
 [[package]]
 name = "spirv_headers"
 version = "1.4.2"
-source = "git+https://github.com/gfx-rs/rspirv.git#3905855#39058551b3bb2340d8c4d2d1da3fcccc6b197080"
+source = "git+https://github.com/gfx-rs/rspirv.git?rev=3905855#39058551b3bb2340d8c4d2d1da3fcccc6b197080"
 dependencies = [
  "bitflags",
  "num-traits",

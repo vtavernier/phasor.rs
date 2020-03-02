@@ -8,5 +8,5 @@ edition = "2018"
 shaderc = "0.6.1"
 heck = "0.3.1"
 spirv_cross = { version = "0.17.1", features = ["glsl"] }
-rspirv = { git = "https://github.com/gfx-rs/rspirv.git#3905855" }
-spirv_headers = { git = "https://github.com/gfx-rs/rspirv.git#3905855" }
+rspirv = { git = "https://github.com/gfx-rs/rspirv.git", rev = "3905855" }
+spirv_headers = { git = "https://github.com/gfx-rs/rspirv.git", rev = "3905855" }
