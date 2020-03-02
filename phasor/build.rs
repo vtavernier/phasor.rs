@@ -34,4 +34,11 @@ fn main() {
     bindings
         .write_to_file(PathBuf::from(env::var("OUT_DIR").unwrap()).join("shared.rs"))
         .expect("couldn't write bindings");
+
+    // Generate C header for library clients
+    cbindgen::Builder::new()
+        .with_crate(env::var("CARGO_MANIFEST_DIR").unwrap())
+        .generate()
+        .expect("unable to generate C bindings")
+        .write_to_file(PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("phasoropt.h"));
 }
