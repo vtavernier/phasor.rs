@@ -23,6 +23,7 @@ enum ApiContext {
     Ready(ApiState),
 }
 
+#[allow(dead_code)]
 struct ApiState {
     el: EventLoop<()>,
     context: Context<PossiblyCurrent>,
