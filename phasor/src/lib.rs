@@ -533,8 +533,8 @@ impl State {
 
         if new_alloc_size > self.allocated_size {
             info!(
-                "reallocating for grid_size: {:?}, kernel_count: {}",
-                params.grid_size, params.kernel_count,
+                "reallocating for grid_size: {:?}, kernel_count: {}, bytes: {}",
+                params.grid_size, params.kernel_count, bytesize::ByteSize(new_alloc_size as u64)
             );
 
             // Setup buffer storage
