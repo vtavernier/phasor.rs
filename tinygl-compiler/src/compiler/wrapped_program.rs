@@ -182,7 +182,7 @@ impl WrappedProgram {
         }
         writeln!(wr, "        )?)")?;
         writeln!(wr, "    }}")?;
-        // Uniform setters for the included shaders
+        // Uniform getters/setters for the included shaders
         for shader in &attached_shaders.shaders_with_uniforms {
             for uniform in shader.uniforms() {
                 let ty = uniform.ty.unwrap();
@@ -202,6 +202,18 @@ impl WrappedProgram {
                 )?;
 
                 writeln!(wr, "    }}")?;
+
+                if let Some(binding) = uniform.binding {
+                    writeln!(
+                        wr,
+                        "    pub fn get_{uniform_sc_name}_binding(&self) -> {type_name} {{",
+                        uniform_sc_name = uniform.name.to_snake_case(),
+                        type_name = ty.rstype()
+                    )?;
+
+                    writeln!(wr, "        {}", binding)?;
+                    writeln!(wr, "    }}")?;
+                }
             }
         }
         writeln!(wr, "}}")?;

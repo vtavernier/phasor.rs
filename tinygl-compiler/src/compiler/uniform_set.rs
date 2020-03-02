@@ -116,8 +116,20 @@ impl WrappedUniformSet {
         // Write trait declaration
         writeln!(wr, "pub trait {} {{", self.trait_name)?;
         // Write methods
+        //
+        // TODO: Some uniforms might have bindings and other might not. How should this be
+        // represented in this API?
         for uniform in &unified {
             let ty = uniform.ty.unwrap();
+
+            if uniform.binding.is_some() {
+                writeln!(
+                    wr,
+                    "    fn get_{uniform_sc_name}_binding(&self) -> {type_name};",
+                    uniform_sc_name = uniform.name.to_snake_case(),
+                    type_name = ty.rstype()
+                )?;
+            }
 
             writeln!(
                 wr,
@@ -139,6 +151,22 @@ impl WrappedUniformSet {
 
             for uniform in &unified {
                 let ty = uniform.ty.unwrap();
+
+                if uniform.binding.is_some() {
+                    writeln!(
+                        wr,
+                        "    fn get_{uniform_sc_name}_binding(&self) -> {type_name} {{",
+                        uniform_sc_name = uniform.name.to_snake_case(),
+                        type_name = ty.rstype()
+                    )?;
+                    writeln!(
+                        wr,
+                        "        {struct_name}::get_{uniform_sc_name}_binding(self)",
+                        struct_name = program.program.struct_name(),
+                        uniform_sc_name = uniform.name.to_snake_case()
+                    )?;
+                    writeln!(wr, "    }}")?;
+                }
 
                 writeln!(
                     wr,

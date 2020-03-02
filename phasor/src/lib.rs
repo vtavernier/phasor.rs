@@ -320,7 +320,7 @@ impl State {
         unsafe {
             // Bind kernel data
             gl.bind_image_texture(
-                0, // TODO get_u_kernels_binding
+                self.init_program.get_u_kernels_binding(),
                 self.kernel_texture.name(),
                 0,
                 false,
@@ -369,7 +369,7 @@ impl State {
         unsafe {
             // Bind kernel data
             gl.bind_image_texture(
-                0, // TODO get_u_kernels_binding
+                self.opt_program.get_u_kernels_binding(),
                 self.kernel_texture.name(),
                 0,
                 false,
@@ -405,7 +405,7 @@ impl State {
         unsafe {
             // Bind kernel data
             gl.bind_image_texture(
-                0, // TODO get_u_kernels_binding
+                self.display_program.get_u_kernels_binding(),
                 self.kernel_texture.name(),
                 0,
                 false,
