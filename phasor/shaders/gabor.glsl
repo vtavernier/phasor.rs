@@ -47,8 +47,6 @@ int cell_margin() {
 
 // 0 = clamp
 // 1 = modulo
-layout(location = 12) uniform int u_CellMode;
-
 int cell_id_(int n, int m) {
     if (u_CellMode == CM_CLAMP) {
         if (n < 0 || n >= m) {

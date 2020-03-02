@@ -1,29 +1,30 @@
 #version 460 core
 #extension GL_ARB_shader_image_load_store : enable
 
-#define K int(gl_WorkGroupSize.x)
 #include "shared.h"
-
-layout(local_size_x = CURRENT_K) in;
-
-layout(location = 0) uniform ivec3 u_Grid;
-layout(location = 12) uniform int u_CellMode;
-
-layout(location = 2, r32f) coherent uniform imageBuffer u_Kernels;
 
 #include "fields.glsl"
 
 void main() {
-    int gi = int(gl_WorkGroupID.x) % u_Grid.x;
-    int gj = int(gl_WorkGroupID.x) / u_Grid.x;
-    vec2 gs = 32.0 / vec2(u_Grid.xy);
-    seed(int(gl_GlobalInvocationID.x) + 1 + u_GlobalSeed);
-    vec2 x = vec2(uni_0_1(), uni_0_1());
-    imageStore(u_Kernels, int(gl_GlobalInvocationID.x * NFLOATS) + 0, vec4(x.x));
-    imageStore(u_Kernels, int(gl_GlobalInvocationID.x * NFLOATS) + 1, vec4(x.y));
-    imageStore(u_Kernels, int(gl_GlobalInvocationID.x * NFLOATS) + 2,
-               vec4(frequency(x + vec2(gi, gj) * gs)));
-    imageStore(u_Kernels, int(gl_GlobalInvocationID.x * NFLOATS) + 3, vec4(0.0f));
-    imageStore(u_Kernels, int(gl_GlobalInvocationID.x * NFLOATS) + 4,
-               vec4(kernelangle(x + vec2(gi, gj) * gs, uint(gl_GlobalInvocationID.x))));
+    vec3 g = vec3(gl_WorkGroupID);
+    vec3 gs = 32.0 / vec3(u_Grid);
+    int idx_base = int((gl_GlobalInvocationID.z * gl_NumWorkGroups.x * gl_NumWorkGroups.y +
+                        gl_GlobalInvocationID.y * gl_NumWorkGroups.x + gl_GlobalInvocationID.x) *
+                       u_KernelCount);
+
+    for (int k = 0; k < u_KernelCount; ++k) {
+        int idx_local = idx_base + k;
+
+        seed(idx_local + 1 + u_GlobalSeed);
+        // TODO: 3D
+        vec2 x = vec2(uni_0_1(), uni_0_1());
+        imageStore(u_Kernels, int(idx_local * NFLOATS) + 0, vec4(x.x));
+        imageStore(u_Kernels, int(idx_local * NFLOATS) + 1, vec4(x.y));
+        // TODO: 3D
+        imageStore(u_Kernels, int(idx_local * NFLOATS) + 2, vec4(frequency(x + (g * gs).xy)));
+        imageStore(u_Kernels, int(idx_local * NFLOATS) + 3, vec4(0.0f));
+        // TODO: 3D
+        imageStore(u_Kernels, int(idx_local * NFLOATS) + 4,
+                   vec4(kernelangle(x + (g * gs).xy, uint(idx_local))));
+    }
 }

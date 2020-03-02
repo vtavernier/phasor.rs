@@ -2,13 +2,6 @@
 #extension GL_ARB_shader_image_load_store : enable
 
 #include "shared.h"
-// TODO: This might be a uniform again later
-#define K CURRENT_K
-
-layout(binding = 0, r32f) coherent uniform imageBuffer u_Kernels;
-
-layout(location = 0) uniform ivec3 u_Grid;
-layout(location = 4) uniform int u_DisplayMode;
 
 #define PREFILTERED
 #include "gabor.glsl"
@@ -17,6 +10,8 @@ layout(location = 0) in vec2 uv;
 
 layout(location = 0) out vec4 o_PixColor;
 layout(location = 1) out vec4 o_PixExtra;
+
+layout(location = 4) uniform int u_DisplayMode;
 
 #include "fields.glsl"
 
@@ -75,6 +70,7 @@ void main() {
 
     if (u_DisplayMode == DM_NOISE) {
         o_PixColor = vec4(0.5 + 0.5 * sin(ph));
+        o_PixColor = vec4(vec3(mod(ph + M_PI, M_2PI) / M_2PI), 1.0);
     } else if (u_DisplayMode == DM_COMPLEX) {
         // Complex conjugate
         o_PixColor = vec4(kv, atan(-w.y, w.x), f);

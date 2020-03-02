@@ -1,8 +1,6 @@
 use std::ffi::CString;
 use std::rc::Rc;
 
-const DEFAULT_BANDWIDTH: f32 = 1.692568750643269; // 3.0 / sqrt(M_PI)
-
 #[repr(C)]
 pub struct Kernel {
     coord_x: f32,
@@ -192,12 +190,13 @@ pub extern "C" fn pg_optimize_ex(
         isotropy_modulation,
         filter_mod_power: filter_modpower,
         filter_modulation,
+        kernel_count: kernel_count as u32,
+        grid_size: Params::compute_grid_size(noise_bandwidth),
     };
 
     let mode = OptimizationMode::from(opt_method);
 
     if init_kernels {
-        state.check_grid(&api_state.gl, kernel_count, width, noise_bandwidth);
         state.run_init(&api_state.gl, &params);
     }
 
@@ -280,8 +279,7 @@ pub extern "C" fn pg_get_error() -> *const i8 {
 
 #[no_mangle]
 pub extern "C" fn pg_get_max_kernels() -> i32 {
-    // TODO: Variable kernel count support
-    super::shared::CURRENT_K as i32
+    super::shared::MAX_K as i32
 }
 
 #[no_mangle]
@@ -315,7 +313,7 @@ mod tests {
         super::pg_optimize_ex(
             512,
             512,
-            crate::shared::CURRENT_K as i32,
+            16,
             params.global_seed,
             4,
             params.angle_mode,

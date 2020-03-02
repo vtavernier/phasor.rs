@@ -10,6 +10,8 @@ pub mod api;
 pub mod shaders;
 pub mod shared;
 
+const DEFAULT_BANDWIDTH: f32 = 1.692568750643269; // 3.0 / sqrt(M_PI)
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum OptimizationMode {
     None,
@@ -81,7 +83,7 @@ pub struct State {
     opt_program: GlHandle<shaders::OptProgram>,
     kernels: GlHandle<tinygl::wrappers::Buffer>,
     kernel_texture: GlHandle<tinygl::wrappers::Texture>,
-    grid_size: cgmath::Vector3<i32>,
+    allocated_size: usize,
     texture_render_target: Option<TextureRenderTarget>,
 }
 
@@ -208,7 +210,6 @@ pub struct Params {
     pub angle_mode: i32,
     pub angle_offset: f32,
     pub angle_range: f32,
-    pub cell_mode: i32,
     pub frequency_bandwidth: f32,
     pub frequency_mode: i32,
     pub global_seed: i32,
@@ -226,6 +227,11 @@ pub struct Params {
     pub isotropy_modulation: f32,
     pub filter_mod_power: f32,
     pub filter_modulation: f32,
+
+    // Global params
+    pub cell_mode: i32,
+    pub kernel_count: u32,
+    pub grid_size: cgmath::Vector3<i32>,
 }
 
 impl Default for Params {
@@ -235,7 +241,6 @@ impl Default for Params {
             angle_mode: shared::AM_GAUSS as i32,
             angle_offset: 0.0,
             angle_range: std::f32::consts::PI,
-            cell_mode: shared::CM_CLAMP as i32,
             frequency_bandwidth: 0.1,
             frequency_mode: shared::FM_STATIC as i32,
             global_seed: 171,
@@ -247,22 +252,35 @@ impl Default for Params {
             max_isotropy: 1.0,
             min_isotropy: 0.0,
             //
-            noise_bandwidth: 3.0 / std::f32::consts::PI.sqrt(),
+            noise_bandwidth: DEFAULT_BANDWIDTH,
             filter_bandwidth: 0.0,
             isotropy_modulation: 2.0,
             filter_mod_power: 2.0,
             filter_modulation: 2.0,
+            //
+            kernel_count: 16,
+            grid_size: Self::compute_grid_size(DEFAULT_BANDWIDTH),
+            cell_mode: shared::CM_CLAMP as i32,
         }
     }
 }
 
 impl Params {
-    fn apply(&self, gl: &Rc<tinygl::Context>, program: &impl shaders::SharedUniformSet) {
+    pub fn compute_grid_size(noise_bandwidth: f32) -> cgmath::Vector3<i32> {
+        let new_gsz = (32.0f32 / ((-(0.05f32.ln())).sqrt() / noise_bandwidth)).ceil() as i32;
+        cgmath::vec3(new_gsz, new_gsz, 1)
+    }
+
+    fn apply_shared(
+        &self,
+        gl: &Rc<tinygl::Context>,
+        program: &(impl shaders::SharedUniformSet + shaders::GlobalUniformSet),
+    ) {
+        self.apply_global(gl, program);
         program.set_u_angle_bandwidth(&gl, self.angle_bandwidth);
         program.set_u_angle_mode(&gl, self.angle_mode);
         program.set_u_angle_offset(&gl, self.angle_offset);
         program.set_u_angle_range(&gl, self.angle_range);
-        program.set_u_cell_mode(&gl, self.cell_mode);
         program.set_u_frequency_bandwidth(&gl, self.frequency_bandwidth);
         program.set_u_frequency_mode(&gl, self.frequency_mode);
         program.set_u_global_seed(&gl, self.global_seed);
@@ -273,6 +291,12 @@ impl Params {
         program.set_u_max_isotropy(&gl, self.max_isotropy);
         program.set_u_min_frequency(&gl, self.min_frequency);
         program.set_u_min_isotropy(&gl, self.min_isotropy);
+    }
+
+    fn apply_global(&self, gl: &Rc<tinygl::Context>, program: &impl shaders::GlobalUniformSet) {
+        program.set_u_cell_mode(&gl, self.cell_mode);
+        program.set_u_grid(&gl, self.grid_size);
+        program.set_u_kernel_count(&gl, self.kernel_count);
     }
 }
 
@@ -285,17 +309,14 @@ impl State {
             opt_program: GlHandle::new(gl, shaders::OptProgram::build(&gl)?),
             kernels: GlHandle::new(gl, tinygl::wrappers::Buffer::new(&gl)?),
             kernel_texture: GlHandle::new(gl, tinygl::wrappers::Texture::new(&gl)?),
-            grid_size: cgmath::vec3(0, 0, 0),
+            allocated_size: 0,
             texture_render_target: None,
         };
 
         // Initialize grid
-        state.check_grid(
-            gl,
-            shared::CURRENT_K as i32,
-            512,
-            3.0 / std::f32::consts::PI.sqrt(),
-        );
+        state
+            .check_grid(gl, &Params::default())
+            .map_err(|err| format!("OpenGL error: {}", err))?;
 
         // Setup texture for buffer storage
         unsafe {
@@ -314,8 +335,14 @@ impl State {
         Ok(state)
     }
 
-    pub fn run_init(&self, gl: &Rc<tinygl::Context>, params: &Params) {
-        self.set_params(gl, self.init_program.as_ref(), params);
+    pub fn run_init(&mut self, gl: &Rc<tinygl::Context>, params: &Params) {
+        // Check grid status
+        self.check_grid(gl, params)
+            .expect("failed to allocate grid");
+
+        // Set params
+        self.init_program.use_program(gl);
+        params.apply_shared(gl, self.init_program.as_ref());
 
         unsafe {
             // Bind kernel data
@@ -331,9 +358,9 @@ impl State {
 
             // Dispatch program
             gl.dispatch_compute(
-                (self.grid_size.x * self.grid_size.y * self.grid_size.z) as u32,
-                1,
-                1,
+                params.grid_size.x as u32,
+                params.grid_size.y as u32,
+                params.grid_size.z as u32,
             );
 
             gl.memory_barrier(tinygl::gl::TEXTURE_FETCH_BARRIER_BIT);
@@ -341,7 +368,7 @@ impl State {
     }
 
     pub fn run_optimize(
-        &self,
+        &mut self,
         gl: &Rc<tinygl::Context>,
         mode: OptimizationMode,
         steps: u32,
@@ -357,12 +384,15 @@ impl State {
             return;
         }
 
+        // Check grid status
+        self.check_grid(gl, params)
+            .expect("failed to allocate grid");
+
         // Run one optimization pass
         self.opt_program.use_program(gl);
+        params.apply_global(gl, self.opt_program.as_ref());
         self.opt_program
             .set_u_noise_bandwidth(gl, params.noise_bandwidth);
-        self.opt_program.set_u_cell_mode(gl, params.cell_mode);
-        self.opt_program.set_u_grid(gl, self.grid_size);
         self.opt_program.set_u_opt_method(gl, mode.as_mode());
         self.opt_program.set_u_opt_steps(gl, steps);
 
@@ -379,7 +409,7 @@ impl State {
             );
 
             gl.dispatch_compute(
-                (self.grid_size.x * self.grid_size.y * self.grid_size.z) as u32,
+                (params.grid_size.x * params.grid_size.y * params.grid_size.z) as u32,
                 1,
                 1,
             );
@@ -388,8 +418,13 @@ impl State {
         }
     }
 
-    pub fn run_display(&self, gl: &Rc<tinygl::Context>, params: &Params, display_mode: i32) {
-        self.set_params(gl, self.display_program.as_ref(), params);
+    pub fn run_display(&mut self, gl: &Rc<tinygl::Context>, params: &Params, display_mode: i32) {
+        // Check grid status
+        self.check_grid(gl, params)
+            .expect("failed to allocate grid");
+
+        self.display_program.use_program(gl);
+        params.apply_shared(gl, self.display_program.as_ref());
         self.display_program
             .set_u_filter_modulation(gl, params.filter_modulation);
         self.display_program
@@ -490,63 +525,41 @@ impl State {
         }
     }
 
-    pub fn check_grid(
-        &mut self,
-        gl: &Rc<tinygl::Context>,
-        kernel_count: i32,
-        width: i32,
-        noise_bandwidth: f32,
-    ) {
-        let new_gsz = (32.0f32 / ((-(0.05f32.ln())).sqrt() / noise_bandwidth)).ceil() as i32;
+    fn check_grid(&mut self, gl: &Rc<tinygl::Context>, params: &Params) -> Result<(), u32> {
+        let new_alloc_size = shared::NFLOATS as usize
+            * std::mem::size_of::<f32>()
+            * (params.grid_size.x * params.grid_size.y * params.grid_size.z) as usize
+            * params.kernel_count as usize;
 
-        // TODO: Variable kernel count support
-        if new_gsz != self.grid_size.x || kernel_count != shared::CURRENT_K as i32 {
-            if kernel_count != shared::CURRENT_K as i32 {
-                warn!(
-                    "variable kernel count not supported yet, current: {}, requested: {}",
-                    shared::CURRENT_K,
-                    kernel_count
-                );
-            }
-
-            if new_gsz == self.grid_size.x {
-                // Nothing to do for now, variable kernel count not supported
-                return;
-            }
-
+        if new_alloc_size > self.allocated_size {
             info!(
-                "reallocating for kernel_count: {}, width: {}, noise_bandwidth: {}, new_gsz: {}",
-                kernel_count, width, noise_bandwidth, new_gsz
+                "reallocating for grid_size: {:?}, kernel_count: {}",
+                params.grid_size, params.kernel_count,
             );
-
-            // Update allocated grid size
-            self.grid_size = cgmath::vec3(new_gsz, new_gsz, 1);
 
             // Setup buffer storage
             unsafe {
                 gl.bind_buffer(tinygl::gl::TEXTURE_BUFFER, Some(self.kernels.name()));
-                // NFLOATS * sizeof(float) * GridX * GridY * K
                 gl.buffer_data_size(
                     tinygl::gl::TEXTURE_BUFFER,
-                    (shared::NFLOATS as usize
-                        * std::mem::size_of::<f32>()
-                        * (self.grid_size.x * self.grid_size.y * self.grid_size.z) as usize
-                        * shared::CURRENT_K as usize) as i32,
+                    new_alloc_size as i32,
                     tinygl::gl::DYNAMIC_DRAW,
                 );
-                gl.bind_buffer(tinygl::gl::TEXTURE_BUFFER, None);
-            }
-        }
-    }
 
-    fn set_params(
-        &self,
-        gl: &Rc<tinygl::Context>,
-        program: &(impl shaders::SharedUniformSet + ProgramCommon),
-        params: &Params,
-    ) {
-        program.use_program(gl);
-        program.set_u_grid(&gl, self.grid_size);
-        params.apply(gl, program);
+                // Check allocation errors
+                let error = gl.get_error();
+
+                gl.bind_buffer(tinygl::gl::TEXTURE_BUFFER, None);
+
+                if error != tinygl::gl::NO_ERROR {
+                    return Err(error);
+                }
+            }
+
+            // Updated allocated size
+            self.allocated_size = new_alloc_size;
+        }
+
+        Ok(())
     }
 }

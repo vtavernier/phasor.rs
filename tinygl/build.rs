@@ -11,14 +11,8 @@ fn main() {
         // Build the OpenGL 4.6 bindings
         let mut file = File::create(&Path::new(&dest).join("bindings.rs")).unwrap();
 
-        Registry::new(
-            Api::Gl,
-            (4, 6),
-            Profile::Core,
-            Fallbacks::All,
-            ["GL_ARB_compute_variable_group_size"],
-        )
-        .write_bindings(StructGenerator, &mut file)
-        .unwrap();
+        Registry::new(Api::Gl, (4, 6), Profile::Core, Fallbacks::All, [])
+            .write_bindings(StructGenerator, &mut file)
+            .unwrap();
     }
 }

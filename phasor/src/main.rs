@@ -46,7 +46,7 @@ fn main() -> Result<(), String> {
     };
 
     // Initialize demo
-    let state = State::new(&gl).expect("failed to initialize state");
+    let mut state = State::new(&gl).expect("failed to initialize state");
     let mut params = Params::default();
     params.min_frequency = 1.0;
     params.max_frequency = 4.0;
