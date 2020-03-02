@@ -47,7 +47,11 @@ fn main() -> Result<(), String> {
 
     // Initialize demo
     let state = State::new(&gl).expect("failed to initialize state");
-    let params = Params::default();
+    let mut params = Params::default();
+    params.min_frequency = 1.0;
+    params.max_frequency = 4.0;
+    params.frequency_mode = phasor::shared::FM_GAUSS as i32;
+    params.filter_bandwidth = 3.0 / std::f32::consts::PI.sqrt();
     state.run_init(&gl, &params);
 
     // Optimization modes
