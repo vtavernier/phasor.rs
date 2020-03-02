@@ -96,7 +96,7 @@ impl ApiContext {
     fn ensure_init(&mut self) -> &mut ApiState {
         match self {
             Self::Unintialized => {
-                env_logger::try_init().ok();
+                crate::log::init();
                 *self = Self::Ready(ApiState::new().expect("failed to initialize api"));
             }
             _ => {}

@@ -1,5 +1,5 @@
 #[macro_use]
-extern crate log;
+extern crate log as log_crate;
 
 use std::rc::Rc;
 
@@ -7,6 +7,7 @@ use tinygl::prelude::*;
 use tinygl::wrappers::GlHandle;
 
 pub mod api;
+pub mod log;
 pub mod shaders;
 pub mod shared;
 
@@ -537,7 +538,7 @@ impl State {
                 params.grid_size, params.kernel_count, bytesize::ByteSize(new_alloc_size as u64)
             );
 
-            // Setup buffer storage
+            // Setupinitialize buffer storage
             unsafe {
                 gl.bind_buffer(tinygl::gl::TEXTURE_BUFFER, Some(self.kernels.name()));
                 gl.buffer_data_size(

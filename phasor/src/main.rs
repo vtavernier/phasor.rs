@@ -10,7 +10,7 @@ use glutin::ContextBuilder;
 use phasor::*;
 
 fn main() -> Result<(), String> {
-    env_logger::init();
+    phasor::log::init();
 
     let el = EventLoop::new();
 
