@@ -18,6 +18,9 @@ fn main() {
     compiler
         .wrap_uniforms(&["init", "display"], "shared")
         .unwrap();
+    compiler
+        .wrap_uniforms(&["init", "opt", "display"], "global")
+        .unwrap();
     compiler.write_root_include().unwrap();
 
     // Generate wrapper for constants
