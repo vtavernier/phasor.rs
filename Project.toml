@@ -1,4 +1,4 @@
-name = "Phasor"
+name = "PhasorOpt"
 uuid = "c6c9101d-ec7a-459d-93b0-91e89414bd43"
 authors = ["Vincent Tavernier <vince.tavernier@gmail.com>"]
 version = "0.1.0"

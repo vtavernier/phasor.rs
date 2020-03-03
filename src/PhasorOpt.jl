@@ -1,9 +1,9 @@
-module Phasor
+module PhasorOpt
 
 # Load binary dependency
 const deps_file = joinpath(dirname(@__FILE__), "..", "deps", "deps.jl")
 if !isfile(deps_file)
-    error("Phasor.jl is not installed properly, run Pkg.build(\"Phasor\") and restart Julia.")
+    error("PhasorOpt.jl is not installed properly, run Pkg.build(\"PhasorOpt\") and restart Julia.")
 end
 include(deps_file)
 
@@ -15,7 +15,7 @@ function __init__()
     check_deps()
 end
 
-# Actual Julia Phasor interface
+# Actual Julia PhasorOpt interface
 init() = pg_init(true)
 terminate() = pg_terminate()
 get_max_kernels() = pg_get_max_kernels()
@@ -161,7 +161,7 @@ export init, terminate, optimize, framex, kernel_width, get_kernels
 export DM_NOISE, DM_COMPLEX, DM_STATE, AM_STATIC, AM_GAUSS, AM_RANGLE, AM_RADIAL, FM_STATIC, FM_GAUSS, IM_ANISOTROPIC, IM_GAUSS, IM_ISOTROPIC, IM_RAMP, CM_CLAMP, CM_MOD, OM_OPTIMIZE, OM_AVERAGE
 
 # For compatibility with former lib
-const PhasorOptGen = Phasor
+const PhasorOptGen = PhasorOpt
 export PhasorOptGen
 
 end # module
