@@ -37,7 +37,14 @@ fn main() {
 
     // Generate C header for library clients
     cbindgen::Builder::new()
+        .with_config(cbindgen::Config {
+            cpp_compat: true,
+            language: cbindgen::Language::C,
+            includes: vec!["shaders/shared.h".to_owned()],
+            ..Default::default()
+        })
         .with_crate(env::var("CARGO_MANIFEST_DIR").unwrap())
+        .exclude_item("Kernel")
         .generate()
         .expect("unable to generate C bindings")
         .write_to_file(PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("phasoropt.h"));
