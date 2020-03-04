@@ -123,11 +123,19 @@ void main() {
                 }
 
                 n.phase = cand_phases[best];
+
+                if (best >= NUM_CAND_PHASES) {
+                    n.state = 1.0;
+                } else {
+                    n.state = 0.0;
+                }
             } else if (u_OptMethod == OM_AVERAGE) {
                 n.phase = get_average_phase(gs, k);
+                n.state = 1.0;
             }
 
             save_phase_at_idx(int(gl_WorkGroupID.x * K + gl_LocalInvocationID.x), n.phase);
+            save_state_at_idx(int(gl_WorkGroupID.x * K + gl_LocalInvocationID.x), n.state);
         }
         memoryBarrierImage();
     }

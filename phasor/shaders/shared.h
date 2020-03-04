@@ -78,6 +78,10 @@ void save_phase_at_idx(int idx, float phase) {
     imageStore(u_Kernels, idx * NFLOATS + 3, vec4(phase));
 }
 
+void save_state_at_idx(int idx, float state) {
+    imageStore(u_Kernels, idx * NFLOATS + 5, vec4(state));
+}
+
 void save_at_idx(int idx, Kernel k) {
     idx *= NFLOATS;
 

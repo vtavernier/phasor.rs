@@ -34,6 +34,11 @@ vec2 phasor(vec2 x, float phi, vec2 wi, float fi
     return gaus * vec2(cos(osc), sin(osc));
 }
 
+float phasor_state(vec2 x, float state) {
+    float b = u_NoiseBandwidth * u_NoiseBandwidth * M_PI;
+    return exp(-b * dot(x, x)) * state;
+}
+
 int cell_margin() {
 #ifdef PREFILTERED
     if (u_FilterBandwidth > 0.0) {

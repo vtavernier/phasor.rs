@@ -27,6 +27,7 @@ void main() {
     int gj = int(gij.y);
 
     vec2 kv = vec2(0.0);
+    float s = 0.0;
 
     // Reference orientation at current pixel
     vec2 o = angle(gij * gs);
@@ -57,6 +58,7 @@ void main() {
                 // evaluate
                 kv += phasor(gij - n.pos, n.phase, vec2(cos(n.angle), sin(n.angle)), n.frequency,
                              w, f, fm);
+                s += phasor_state(gij - n.pos, n.state);
             }
         }
     }
@@ -70,15 +72,9 @@ void main() {
     } else if (u_DisplayMode == DM_COMPLEX) {
         // Complex conjugate
         o_PixColor = vec4(kv, atan(-w.y, w.x), f);
-        o_PixExtra = vec4(is, fm, 0., 0.);
+        o_PixExtra = vec4(is, fm, s / K, 0.);
     } else if (u_DisplayMode == DM_STATE) {
-        float state = 0.0;
-        for (int k = 0; k < K; k++) {
-            uint idx = ((gi + gj * u_Grid.x) * K + k) * NFLOATS;
-            state = max(state, imageLoad(u_Kernels, int(idx) + 5).x);
-        }
-
-        o_PixColor = vec4(I) + 0.0 * vec4(state, 0.0, 0.0, 0.0);
+        o_PixColor = vec4(vec3(pow(s / K, 1. / 2.2)), 1.0);
     } else {
         o_PixColor = vec4(1.0, 0.0, 1.0, 1.0);
     }

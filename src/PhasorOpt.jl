@@ -107,7 +107,7 @@ function framex(width;
   )
 
   if export_extra
-    (result..., copy(reinter_extra[2,:,:]))
+    (result..., copy(reinter_extra[2,:,:]), copy(reinter_extra[3,:,:]))
   else
     result
   end
