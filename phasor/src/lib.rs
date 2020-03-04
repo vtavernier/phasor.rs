@@ -253,8 +253,7 @@ impl State {
     }
 
     fn check_grid(&mut self, gl: &Rc<tinygl::Context>, params: &Params) -> Result<(), u32> {
-        let new_alloc_size = shared::NFLOATS as usize
-            * std::mem::size_of::<f32>()
+        let new_alloc_size = std::mem::size_of::<shared::Kernel>()
             * (params.grid_size.x * params.grid_size.y * params.grid_size.z) as usize
             * params.kernel_count as usize;
 

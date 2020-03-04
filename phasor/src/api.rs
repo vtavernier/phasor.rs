@@ -1,22 +1,12 @@
 use std::ffi::CString;
 use std::rc::Rc;
 
-#[repr(C)]
-pub struct Kernel {
-    coord_x: f32,
-    coord_y: f32,
-    frequ: f32,
-    phase: f32,
-    angle: f32,
-    state: f32,
-}
-
 use glutin::event_loop::EventLoop;
 use glutin::{Context, ContextBuilder, PossiblyCurrent};
 
 use tinygl::prelude::*;
 
-use super::{OptimizationMode, Params, State};
+use super::{OptimizationMode, Params, State, shared::Kernel};
 
 enum ApiContext {
     Unintialized,
@@ -307,8 +297,8 @@ pub extern "C" fn pg_get_kernels(
                 *kernel_count = api_state.kernel_count;
 
                 // Allocate CPU-side buffer that's large enough
-                let target_size =
-                    (super::shared::NFLOATS as i32 * *grid_x * *grid_y * *kernel_count) as usize;
+                let target_size = std::mem::size_of::<Kernel>() / std::mem::size_of::<f32>()
+                    * (*grid_x * *grid_y * *kernel_count) as usize;
                 if api_state.buffer_kernels.len() < target_size {
                     api_state.buffer_kernels.resize(target_size, 0.0);
                 }
