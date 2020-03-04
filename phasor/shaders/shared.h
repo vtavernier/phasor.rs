@@ -23,6 +23,7 @@
 
 #define OM_OPTIMIZE 0
 #define OM_AVERAGE 1
+#define OM_HYBRID 2
 
 #define M_PI 3.14159265358979323846
 #define M_2PI (2.0 * M_PI)

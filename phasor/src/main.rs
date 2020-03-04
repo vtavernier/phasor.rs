@@ -89,6 +89,12 @@ fn main() -> Result<(), String> {
                                         OptimizationMode::Average,
                                     );
                                 }
+                                VirtualKeyCode::H => {
+                                    optimizing.toggle_and_switch(
+                                        &mut active_mode,
+                                        OptimizationMode::Hybrid,
+                                    );
+                                }
                                 VirtualKeyCode::O => {
                                     optimizing.toggle_and_switch(
                                         &mut active_mode,

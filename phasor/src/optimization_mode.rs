@@ -5,6 +5,7 @@ pub enum OptimizationMode {
     None,
     Optimize,
     Average,
+    Hybrid,
 }
 
 impl OptimizationMode {
@@ -13,6 +14,7 @@ impl OptimizationMode {
             Self::None => -1,
             Self::Optimize => shared::OM_OPTIMIZE as i32,
             Self::Average => shared::OM_AVERAGE as i32,
+            Self::Hybrid => shared::OM_HYBRID as i32,
         }
     }
 
@@ -32,7 +34,7 @@ impl OptimizationMode {
     pub fn toggle(&mut self, active_mode: &mut OptimizationMode) {
         match self {
             Self::None => *self = *active_mode,
-            Self::Optimize | Self::Average => {
+            Self::Optimize | Self::Average | Self::Hybrid => {
                 *active_mode = *self;
                 *self = Self::None;
             }
@@ -60,6 +62,7 @@ impl From<i32> for OptimizationMode {
         match u32::try_from(value) {
             Ok(shared::OM_OPTIMIZE) => Self::Optimize,
             Ok(shared::OM_AVERAGE) => Self::Average,
+            Ok(shared::OM_HYBRID) => Self::Hybrid,
             _ => Self::None,
         }
     }

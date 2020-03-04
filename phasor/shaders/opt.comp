@@ -68,14 +68,22 @@ void main() {
             Kernel k = kernels[kid];
             Kernel n;
 
-            if (u_OptMethod == OM_OPTIMIZE) {
+            if (u_OptMethod == OM_OPTIMIZE || u_OptMethod == OM_HYBRID) {
                 float phase_inc = gs.x * k.frequency * 2.0f * M_PI / 64.0;
-                const int num_cand_phases = 3;
-                float cand_phases[num_cand_phases] = {k.phase, k.phase - phase_inc,
-                                                      k.phase + phase_inc};
+                // Base number of optimization choices
+                const int NUM_CAND_PHASES = 3;
+                // Optimization choices
+                float cand_phases[NUM_CAND_PHASES + 1] = {k.phase, k.phase - phase_inc,
+                    k.phase + phase_inc, 0.};
+
+                const int num_cand_phases = (u_OptMethod == OM_HYBRID ? 1 : 0) + NUM_CAND_PHASES;
+
+                if (u_OptMethod == OM_HYBRID) {
+                    cand_phases[NUM_CAND_PHASES] = get_average_phase(gs, k);
+                }
 
                 // Record votes
-                float votes[num_cand_phases];
+                float votes[NUM_CAND_PHASES + 1];
                 for (int i = 0; i < num_cand_phases; i++) {
                     votes[i] = 0;
                 }
