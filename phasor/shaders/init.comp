@@ -16,15 +16,17 @@ void main() {
         int idx_local = idx_base + k;
 
         seed(idx_local + 1 + u_GlobalSeed);
+
+        Kernel n;
         // TODO: 3D
-        vec2 x = vec2(uni_0_1(), uni_0_1());
-        imageStore(u_Kernels, int(idx_local * NFLOATS) + 0, vec4(x.x));
-        imageStore(u_Kernels, int(idx_local * NFLOATS) + 1, vec4(x.y));
+        n.pos = vec2(uni_0_1(), uni_0_1());
         // TODO: 3D
-        imageStore(u_Kernels, int(idx_local * NFLOATS) + 2, vec4(frequency(x + (g * gs).xy)));
-        imageStore(u_Kernels, int(idx_local * NFLOATS) + 3, vec4(0.0f));
+        n.frequency = frequency(n.pos + (g * gs).xy);
+        n.phase = 0.0;
         // TODO: 3D
-        imageStore(u_Kernels, int(idx_local * NFLOATS) + 4,
-                   vec4(kernelangle(x + (g * gs).xy, uint(idx_local))));
+        n.angle = kernelangle(n.pos + (g * gs).xy, uint(idx_local));
+        n.state = 0.0;
+
+        save_at_idx(idx_local, n);
     }
 }

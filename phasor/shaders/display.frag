@@ -51,16 +51,12 @@ void main() {
 
             for (int k = 0; k < K; k++) {
                 // fetch kernel
-                vec2 npos;
-                float nphase, nangle, nfrequ;
-                uint idx = ((ci + cj * u_Grid.x) * K + k) * NFLOATS;
-                npos.x = float(ni) + imageLoad(u_Kernels, int(idx) + 0).x;
-                npos.y = float(nj) + imageLoad(u_Kernels, int(idx) + 1).x;
-                nfrequ = imageLoad(u_Kernels, int(idx) + 2).x * gs.x;
-                nphase = imageLoad(u_Kernels, int(idx) + 3).x;
-                nangle = imageLoad(u_Kernels, int(idx) + 4).x;
+                int idx = (ci + cj * u_Grid.x) * K + k;
+                Kernel n = load_at_idx(idx, vec2(ni, nj));
+                n.frequency *= gs.x;
                 // evaluate
-                kv += phasor(gij - npos, nphase, vec2(cos(nangle), sin(nangle)), nfrequ, w, f, fm);
+                kv += phasor(gij - n.pos, n.phase, vec2(cos(n.angle), sin(n.angle)), n.frequency,
+                             w, f, fm);
             }
         }
     }

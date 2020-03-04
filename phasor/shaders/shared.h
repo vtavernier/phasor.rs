@@ -1,4 +1,4 @@
-#define NFLOATS 6u
+#define NFLOATS 6
 #define MAX_K 64
 
 #define DM_NOISE 0
@@ -29,8 +29,12 @@
 #define M_PI2 (M_PI * M_PI)
 
 struct Kernel {
+#ifdef TINYGL
+    vec2 pos;
+#else
     float x;
     float y;
+#endif
     float frequency;
     float phase;
     float angle;
@@ -50,5 +54,37 @@ vec3 gaussian(vec2 x, float b) {
     vec2 d = -2. * M_PI * b * b * x;
     // Gaussian value, X derivative, Y derivative
     return a * vec3(1., d.x, d.y);
+}
+
+Kernel invalid_kernel() { return Kernel(vec2(-10.0), 0., 0., 0., 0.); }
+
+Kernel load_at_idx(int idx, vec2 pos_offset) {
+    idx *= NFLOATS;
+
+    return Kernel(
+        pos_offset + vec2(
+            imageLoad(u_Kernels, idx + 0).x,
+            imageLoad(u_Kernels, idx + 1).x
+        ),
+        imageLoad(u_Kernels, idx + 2).x,
+        imageLoad(u_Kernels, idx + 3).x,
+        imageLoad(u_Kernels, idx + 4).x,
+        imageLoad(u_Kernels, idx + 5).x
+    );
+}
+
+void save_phase_at_idx(int idx, float phase) {
+    imageStore(u_Kernels, idx * NFLOATS + 3, vec4(phase));
+}
+
+void save_at_idx(int idx, Kernel k) {
+    idx *= NFLOATS;
+
+    imageStore(u_Kernels, idx + 0, vec4(k.pos.x));
+    imageStore(u_Kernels, idx + 1, vec4(k.pos.y));
+    imageStore(u_Kernels, idx + 2, vec4(k.frequency));
+    imageStore(u_Kernels, idx + 3, vec4(k.phase));
+    imageStore(u_Kernels, idx + 4, vec4(k.angle));
+    imageStore(u_Kernels, idx + 5, vec4(k.state));
 }
 #endif
