@@ -80,7 +80,7 @@ function framex(width;
                       isotropy_power,
                       cell_mode,
                       opt_method,
-                      1,
+                      DM_COMPLEX,
                       init_kernels)
 
   extra_ptr = pg_get_extra()
