@@ -36,7 +36,7 @@ vec2 phasor(vec2 x, float phi, vec2 wi, float fi
 
 float phasor_state(vec2 x, float state) {
     float b = u_NoiseBandwidth * u_NoiseBandwidth * M_PI;
-    return exp(-b * dot(x, x)) * state;
+    return (b * dot(x, x) < 2. ? 1. : 0.) * state;
 }
 
 int cell_margin() {
