@@ -143,7 +143,7 @@ fn main() -> Result<(), String> {
                         state.run_optimize(&gl, optimizing, 1, &params);
                     }
 
-                    state.run_display(&gl, &params, shared::DM_STATE as i32);
+                    state.run_display(&gl, &params, shared::DM_NOISE as i32);
                 }
 
                 windowed_context.swap_buffers().unwrap();
