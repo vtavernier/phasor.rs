@@ -1,7 +1,7 @@
 using Clang
 
 const rustlibname = "phasor"
-const juliapackage = "Phasor"
+const juliapackage = "PhasorOpt"
 
 const libname = Sys.iswindows() ? rustlibname : "lib" * rustlibname
 # Windows .dlls do not have the "lib" prefix
@@ -18,7 +18,7 @@ function build_dylib()
     @assert isfile(release_dylib_filepath) "$release_dylib_filepath not found. Build may have failed."
     cp(release_dylib_filepath, joinpath(@__DIR__, dylib), force=true)
 
-    write_deps_file(libname, dylib, juliapackage)
+    write_deps_file("lib" * rustlibname, dylib, juliapackage)
 end
 
 function dylib_filename()
