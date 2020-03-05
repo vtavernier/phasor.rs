@@ -158,7 +158,7 @@ function set_kernels(kernels::Array{Kernel,3})
 end
 
 export init, terminate, optimize, framex, kernel_width, get_kernels
-export DM_NOISE, DM_COMPLEX, DM_STATE, AM_STATIC, AM_GAUSS, AM_RANGLE, AM_RADIAL, FM_STATIC, FM_GAUSS, IM_ANISOTROPIC, IM_GAUSS, IM_ISOTROPIC, IM_RAMP, CM_CLAMP, CM_MOD, OM_OPTIMIZE, OM_AVERAGE, OM_HYBRID
+export DM_NOISE, DM_COMPLEX, DM_STATE, AM_STATIC, AM_GAUSS, AM_RANGLE, AM_RADIAL, FM_STATIC, FM_GAUSS, IM_ANISOTROPIC, IM_GAUSS, IM_ISOTROPIC, IM_RAMP, CM_CLAMP, CM_MOD, OM_OPTIMIZE, OM_AVERAGE, OM_HYBRID, OM_COND_AVERAGE
 
 # For compatibility with former lib
 const PhasorOptGen = PhasorOpt
