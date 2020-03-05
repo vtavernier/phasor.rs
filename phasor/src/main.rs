@@ -101,6 +101,10 @@ fn main() -> Result<(), String> {
                                         OptimizationMode::Hybrid,
                                     );
                                 }
+                                VirtualKeyCode::I => {
+                                    state.run_init(&gl, &params);
+                                    windowed_context.window().request_redraw();
+                                }
                                 VirtualKeyCode::O => {
                                     optimizing.toggle_and_switch(
                                         &mut active_mode,
