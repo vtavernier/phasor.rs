@@ -16,6 +16,22 @@ You'll need the following dependencies available in your PATH:
 * A C++ Compiler
 * [Rust](https://rustup.rs/)
 * [CMake](https://cmake.org/)
+* [Ninja](https://ninja-build.org/)
+* [libclang (LLVM)](https://llvm.org/)
+
+On Debian these can be installed with apt:
+
+```
+# Other dependencies
+sudo apt install build-essentials cmake ninja-build llvm
+# Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+On Windows, if you have Chocolatey installed:
+```
+cinst rustup.install visualstudio2019community visualstudio2019-workload-vctools cmake ninja llvm
+```
 
 Then, in a terminal:
 
