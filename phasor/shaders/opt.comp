@@ -68,7 +68,7 @@ void main() {
             Kernel k = kernels[kid];
             Kernel n;
 
-            if (u_OptMethod & OM_OPTIMIZE_BIT) {
+            if ((u_OptMethod & OM_OPTIMIZE_BIT) == OM_OPTIMIZE_BIT) {
                 float phase_inc = gs.x * k.frequency * 2.0f * M_PI / 64.0;
                 // Base number of optimization choices
                 const int NUM_CAND_PHASES = 3;
@@ -76,7 +76,7 @@ void main() {
                 float cand_phases[NUM_CAND_PHASES + 1] = {k.phase, k.phase - phase_inc,
                     k.phase + phase_inc, 0.};
 
-                const int num_cand_phases = (u_OptMethod & OM_AVERAGE_BIT ? 1 : 0) + NUM_CAND_PHASES;
+                const int num_cand_phases = ((u_OptMethod & OM_AVERAGE_BIT) == OM_AVERAGE_BIT ? 1 : 0) + NUM_CAND_PHASES;
 
                 if (num_cand_phases > NUM_CAND_PHASES) {
                     cand_phases[NUM_CAND_PHASES] = get_average_phase(gs, k);
@@ -101,7 +101,7 @@ void main() {
                         vec2 nv = phasor(pos - n.pos, n.phase, vec2(cos(n.angle), sin(n.angle)),
                                          n.frequency);
                         for (int cph = 0; cph < num_cand_phases; cph++) {
-                            if (u_OptMethod & OM_COND_AVERAGE && (cph > 0 && cph < NUM_CAND_PHASES))
+                            if ((u_OptMethod & OM_COND_AVERAGE) == OM_COND_AVERAGE && (cph > 0 && cph < NUM_CAND_PHASES))
                                 continue;
 
                             vec2 kv = phasor(pos - k.pos, cand_phases[cph],
