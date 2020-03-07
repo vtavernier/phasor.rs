@@ -23,7 +23,7 @@ On Debian these can be installed with apt:
 
 ```
 # Other dependencies
-sudo apt install build-essentials cmake ninja-build llvm
+sudo apt install build-essentials cmake ninja-build clang
 # Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
