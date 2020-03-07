@@ -19,13 +19,15 @@ impl ContextEx {
     where
         F: FnMut(&str) -> *const std::os::raw::c_void + Clone,
     {
+        use glow::HasContext;
+
         let gl = Self {
             ctx: glow::Context::from_loader_function(loader_function.clone()),
             glx: gl::Gl::load_with(loader_function),
         };
 
         // Setup logging on the context
-        gl.debug_message_callback(|source, message_type, id, severity, message| {
+        gl.ctx.debug_message_callback(|source, message_type, id, severity, message| {
             use crate::gl as Gl;
             let source = match source {
                 Gl::DEBUG_SOURCE_API => "opengl::api",
@@ -65,7 +67,7 @@ impl ContextEx {
                         "{} ({}): {}{}",
                         message_type,
                         id,
-                        message.to_string_lossy(),
+                        message,
                         if level == log::Level::Warn || level == log::Level::Error {
                             format!(", stack backtrace:\n{:?}", backtrace::Backtrace::new())
                         } else {
@@ -152,41 +154,6 @@ impl ContextEx {
             access,
             format,
         );
-    }
-
-    /// Set up a callback for debug messages from the OpenGL driver
-    pub unsafe fn debug_message_callback<F>(&self, callback: F)
-    where
-        F: FnMut(u32, u32, u32, u32, &std::ffi::CStr) + 'static,
-    {
-        self.glx.DebugMessageCallback(
-            Some(tinygl_debug_message_callback::<F>),
-            Box::into_raw(Box::new(callback)) as *const std::ffi::c_void,
-        );
-    }
-}
-
-extern "system" fn tinygl_debug_message_callback<F>(
-    source: u32,
-    message_type: u32,
-    id: u32,
-    severity: u32,
-    length: i32,
-    message: *const i8,
-    user_param: *mut std::ffi::c_void,
-) where
-    F: FnMut(u32, u32, u32, u32, &std::ffi::CStr),
-{
-    unsafe {
-        let callback_ptr = user_param as *mut F;
-        let callback = &mut *callback_ptr;
-
-        let message = &std::ffi::CStr::from_bytes_with_nul_unchecked(std::slice::from_raw_parts(
-            message as *const _,
-            length as usize,
-        ));
-
-        callback(source, message_type, id, severity, message);
     }
 }
 
