@@ -52,7 +52,7 @@ end
 """
 
     # LIBPHASOR_HEADERS are those headers to be wrapped.
-    LIBPHASOR_INCLUDE = joinpath(@__DIR__, "..", "phasor") |> normpath
+    LIBPHASOR_INCLUDE = joinpath(@__DIR__, "..") |> normpath
     LIBPHASOR_HEADERS = [joinpath(LIBPHASOR_INCLUDE, "shaders", "shared.h"), joinpath(LIBPHASOR_INCLUDE, "phasoropt.h")]
 
     wc = init(; headers = LIBPHASOR_HEADERS,
