@@ -1,2 +1,9 @@
 /target
 Manifest.toml
+/target
+**/*.rs.bk
+Cargo.lock
+bin/
+pkg/
+wasm-pack.log
+phasoropt.h

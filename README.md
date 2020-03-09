@@ -53,9 +53,11 @@ as a dependency of the current project with the following code:
 ```jl
 import Pkg
 Pkg.develop(Pkg.PackageSpec(path="../phasor.rs"))
+Pkg.build("PhasorOpt")
 ```
 
-Then you can use it by importing the relevant module:
+Then you can use it by importing the relevant module (assuming you have the `Images`
+package installed, using `Pkg.add("Images")`):
 
 ```
 import PhasorOpt, Images

@@ -1,14 +1,20 @@
-[workspace]
-members = [
-        "phasor",
-        "tinygl",
-        "tinygl-compiler",
-]
+[package]
+name = "phasor"
+version = "0.1.0"
+authors = ["Vincent Tavernier <vince.tavernier@gmail.com>"]
+edition = "2018"
 
-exclude = [
-        "xtask",
-]
+[lib]
+crate-type = ["rlib", "cdylib"]
 
-[profile.release]
-# Tell `rustc` to optimize for small code size.
-opt-level = "s"
+[dependencies]
+tinygl = { git = "https://github.com/vtavernier/tinygl.git" }
+log = "0.4.8"
+glutin = "0.23.0"
+env_logger = "0.7.1"
+bytesize = "1.0.0"
+
+[build-dependencies]
+bindgen = "0.53.1"
+tinygl-compiler = { git = "https://github.com/vtavernier/tinygl.git" }
+cbindgen = "0.13.1"
