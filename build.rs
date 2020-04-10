@@ -2,26 +2,42 @@ use std::env;
 use std::path::PathBuf;
 
 fn main() {
-    let mut compiler = tinygl_compiler::CompilerBuilder::default().build().unwrap();
+    let mut compiler = tinygl_compiler::CompilerBuilder::new().build().unwrap();
 
-    compiler.wrap_shader("shaders/display.frag").unwrap();
-    compiler.wrap_shader("shaders/display.vert").unwrap();
-    compiler.wrap_shader("shaders/init.comp").unwrap();
-    compiler.wrap_shader("shaders/opt.comp").unwrap();
-    compiler
-        .wrap_program(&["shaders/display.vert", "shaders/display.frag"], "display")
+    let display_frag = compiler.wrap_shader("shaders/display.frag").unwrap();
+    let display_vert = compiler.wrap_shader("shaders/display.vert").unwrap();
+    let init_comp = compiler.wrap_shader("shaders/init.comp").unwrap();
+    let opt_comp = compiler.wrap_shader("shaders/opt.comp").unwrap();
+
+    let display_prog = compiler
+        .wrap_program(&[&display_vert, &display_frag], "display")
         .unwrap();
-    compiler
-        .wrap_program(&["shaders/init.comp"], "init")
+    let init_prog = compiler.wrap_program(&[&init_comp], "init").unwrap();
+    let opt_prog = compiler.wrap_program(&[&opt_comp], "opt").unwrap();
+
+    let shared_uniforms = compiler
+        .wrap_uniforms(&[&init_prog, &display_prog], "shared")
         .unwrap();
-    compiler.wrap_program(&["shaders/opt.comp"], "opt").unwrap();
-    compiler
-        .wrap_uniforms(&["init", "display"], "shared")
+    let global_uniforms = compiler
+        .wrap_uniforms(&[&init_prog, &opt_prog, &display_prog], "global")
         .unwrap();
+
     compiler
-        .wrap_uniforms(&["init", "opt", "display"], "global")
+        .write_root_include(
+            env::var("OUT_DIR").unwrap(),
+            &[
+                &display_frag,
+                &display_vert,
+                &init_comp,
+                &opt_comp,
+                &display_prog,
+                &init_prog,
+                &opt_prog,
+                &shared_uniforms,
+                &global_uniforms,
+            ],
+        )
         .unwrap();
-    compiler.write_root_include().unwrap();
 
     // Generate wrapper for constants
     println!("cargo:rerun-if-changed=shaders/shared.h");
