@@ -499,22 +499,25 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
 
         // Write fields
         for (name, field) in &param_bag.param_fields {
-            for (idx, channel_name) in ["r", "g", "b", "a"].iter().enumerate() {
-                let field = field.field.index_axis(Axis(3), idx);
+            let path = format!("/fields/{}", name);
+
+            {
+                let field = field.field.index_axis(Axis(3), 0);
                 std_layout.assign(&field);
-                let path = format!("/fields/{}/{}", name, channel_name);
 
                 let dim: (usize, usize, usize) = std_layout.dim().into();
                 let dataset = file.new_dataset::<u8>().gzip(6).create(&path, dim)?;
                 dataset.write(std_layout.view())?;
 
-                writeln!(meta, "        <Attribute Name=\"{name}_{channel}\" AttributeType=\"Scalar\" Center=\"Cell\">",
-                    name = name,
-                    channel = channel_name)?;
+                writeln!(
+                    meta,
+                    "        <Attribute Name=\"{name}\" AttributeType=\"Scalar\" Center=\"Cell\">",
+                    name = name
+                )?;
                 writeln!(meta, "          <DataItem Dimensions=\"{x} {y} {z}\" Format=\"HDF5\" DataType=\"UInt\" Precision=\"1\">",
-                    x = dim.0,
-                    y = dim.1,
-                    z = dim.2)?;
+                x = dim.0,
+                y = dim.1,
+                z = dim.2)?;
                 writeln!(meta, "            {}:{}", h5_file_name, path)?;
                 writeln!(meta, "          </DataItem>")?;
                 writeln!(meta, "        </Attribute>")?;
@@ -522,14 +525,14 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
 
             // Bounding box
             file.new_dataset::<f64>()
-                .create(&format!("/fields/{}/bounding_box_min", name), (3,))?
+                .create(&format!("{}/bounding_box_min", path), (3,))?
                 .write(&[
                     field.field_box_mm_min_x,
                     field.field_box_mm_min_y,
                     field.field_box_mm_min_z,
                 ])?;
             file.new_dataset::<f64>()
-                .create(&format!("/fields/{}/bounding_box_max", name), (3,))?
+                .create(&format!("{}/bounding_box_max", path), (3,))?
                 .write(&[
                     field.field_box_mm_max_x,
                     field.field_box_mm_max_y,
