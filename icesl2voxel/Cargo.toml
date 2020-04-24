@@ -20,3 +20,4 @@ ndarray = { version = "0.13", features = [ "serde", "rayon" ] }
 hdf5 = "0.6"
 log = "0.4"
 env_logger = "0.7"
+stl_io = "0.4.2"

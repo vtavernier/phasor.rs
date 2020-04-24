@@ -41,6 +41,10 @@ struct Opts {
     #[structopt(short, long)]
     input: PathBuf,
 
+    /// Geometry input
+    #[structopt(short, long)]
+    mesh: Option<PathBuf>,
+
     /// HDF5 file path for output
     #[structopt(short, long)]
     output: Option<PathBuf>,
@@ -397,6 +401,36 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
         }
     }
 
+    // Load geometry and compute origin
+    let (x_offset, y_offset, z_offset) = if let Some(mesh_path) = opts.mesh {
+        let mut mesh = File::open(mesh_path)?;
+        let mesh = stl_io::read_stl(&mut mesh)?;
+
+        let mut x_min = std::f32::MAX;
+        let mut y_min = std::f32::MAX;
+        let mut z_min = std::f32::MAX;
+        let mut x_max = std::f32::MIN;
+        let mut y_max = std::f32::MIN;
+        let mut z_max = std::f32::MIN;
+
+        for vertex in mesh.vertices {
+            x_min = vertex[0].min(x_min);
+            y_min = vertex[1].min(y_min);
+            z_min = vertex[2].min(z_min);
+            x_max = vertex[0].max(x_max);
+            y_max = vertex[1].max(y_max);
+            z_max = vertex[2].max(z_max);
+        }
+
+        (
+            ((x_min + x_max) / 2.0).into(),
+            ((y_min + y_max) / 2.0).into(),
+            ((z_min + z_max) / 2.0).into(),
+        )
+    } else {
+        (0.0f64, 0.0f64, 0.0f64)
+    };
+
     // Write fields
     let _e = hdf5::silence_errors();
 
@@ -414,43 +448,44 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
         // Assume all fields share the same grid
         let first_field = param_bag.param_fields.iter().next().unwrap().1;
 
-        let xy_mm_per_pixels = param_bag.params.get("xy_mm_per_pixels").unwrap().as_float();
-        let z_layer_height_mm = param_bag
-            .params
-            .get("z_layer_height_mm")
-            .unwrap()
-            .as_float();
-
         writeln!(meta, "    <Grid Name=\"mesh\" GridType=\"Uniform\">")?;
         writeln!(meta, "      <Topology Name=\"topo\" TopologyType=\"3DCoRectMesh\" NumberOfElements=\"{x} {y} {z}\" />",
             x = first_field.field.dim().0,
             y = first_field.field.dim().1,
             z = first_field.field.dim().2,)?;
         writeln!(meta, "      <Geometry Name=\"geo\" Type=\"ORIGIN_DXDYDZ\">")?;
+
+        let x_scale = (first_field.field_box_mm_max_x - first_field.field_box_mm_min_x)
+            / first_field.field_sx as f64;
+        let y_scale = (first_field.field_box_mm_max_y - first_field.field_box_mm_min_y)
+            / first_field.field_sy as f64;
+        let z_scale = (first_field.field_box_mm_max_z - first_field.field_box_mm_min_z)
+            / (first_field.field_sz - 1) as f64;
+
         // TODO: Write this in HDF
         writeln!(meta, "        <DataItem Format=\"XML\" Dimensions=\"3\">")?;
         writeln!(
             meta,
-            "          {x} {y} {z}",
-            x = -(first_field.field_box_mm_max_x - first_field.field_box_mm_min_x) / 2.,
-            y = -(first_field.field_box_mm_max_y - first_field.field_box_mm_min_y) / 2.,
-            z = -(first_field.field_box_mm_max_z - first_field.field_box_mm_min_z) / 2.,
+            "          {z} {y} {x}",
+            x = x_offset
+                + (first_field.field_box_mm_max_x - first_field.field_box_mm_min_x) / -2.0
+                + 0.75 / x_scale,
+            y = y_offset
+                + (first_field.field_box_mm_max_y - first_field.field_box_mm_min_y) / -2.0
+                + 0.75 / y_scale,
+            z = z_offset
+                + (first_field.field_box_mm_max_z - first_field.field_box_mm_min_z) / -2.0
+                + 0.25 / z_scale,
         )?;
         writeln!(meta, "        </DataItem>")?;
         // TODO: Write this in HDF
         writeln!(meta, "        <DataItem Format=\"XML\" Dimensions=\"3\">")?;
         writeln!(
             meta,
-            "          {x} {y} {z}",
-            x = 1.
-                / ((first_field.field_box_mm_max_x - first_field.field_box_mm_min_x)
-                    / first_field.field_sx as f64),
-            y = 1.
-                / ((first_field.field_box_mm_max_y - first_field.field_box_mm_min_y)
-                    / first_field.field_sy as f64),
-            z = 1.
-                / ((first_field.field_box_mm_max_z - first_field.field_box_mm_min_z)
-                    / first_field.field_sz as f64),
+            "          {z} {y} {x}",
+            x = x_scale,
+            y = y_scale,
+            z = z_scale,
         )?;
         writeln!(meta, "        </DataItem>")?;
         writeln!(meta, "      </Geometry>")?;
@@ -484,6 +519,22 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
                 writeln!(meta, "          </DataItem>")?;
                 writeln!(meta, "        </Attribute>")?;
             }
+
+            // Bounding box
+            file.new_dataset::<f64>()
+                .create(&format!("/fields/{}/bounding_box_min", name), (3,))?
+                .write(&[
+                    field.field_box_mm_min_x,
+                    field.field_box_mm_min_y,
+                    field.field_box_mm_min_z,
+                ])?;
+            file.new_dataset::<f64>()
+                .create(&format!("/fields/{}/bounding_box_max", name), (3,))?
+                .write(&[
+                    field.field_box_mm_max_x,
+                    field.field_box_mm_max_y,
+                    field.field_box_mm_max_z,
+                ])?;
         }
 
         // Write array params
