@@ -18,7 +18,7 @@ use std::convert::TryFrom;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use xml::reader::{EventReader, XmlEvent};
 
@@ -374,6 +374,315 @@ impl ParamBag {
     }
 }
 
+fn read_offsets(geometry: &Option<PathBuf>) -> Result<(f64, f64, f64), failure::Error> {
+    if let Some(mesh_path) = geometry {
+        let mut mesh = File::open(mesh_path)?;
+        let mesh = stl_io::read_stl(&mut mesh)?;
+
+        let mut x_min = std::f32::MAX;
+        let mut y_min = std::f32::MAX;
+        let mut z_min = std::f32::MAX;
+        let mut x_max = std::f32::MIN;
+        let mut y_max = std::f32::MIN;
+        let mut z_max = std::f32::MIN;
+
+        for vertex in mesh.vertices {
+            x_min = vertex[0].min(x_min);
+            y_min = vertex[1].min(y_min);
+            z_min = vertex[2].min(z_min);
+            x_max = vertex[0].max(x_max);
+            y_max = vertex[1].max(y_max);
+            z_max = vertex[2].max(z_max);
+        }
+
+        Ok((
+            ((x_min + x_max) / 2.0).into(),
+            ((y_min + y_max) / 2.0).into(),
+            ((z_min + z_max) / 2.0).into(),
+        ))
+    } else {
+        Ok((0.0f64, 0.0f64, 0.0f64))
+    }
+}
+
+fn write_hdf5(output: &Path, param_bag: &ParamBag) -> Result<(), failure::Error> {
+    let _e = hdf5::silence_errors();
+
+    let file = hdf5::File::create(&output)?;
+
+    // Assume all fields share the same grid
+    let first_field = param_bag.param_fields.iter().next().unwrap().1;
+
+    // For converting into standard layout
+    let mut std_layout = ndarray::Array3::<u8>::zeros((
+        first_field.field.dim().0,
+        first_field.field.dim().1,
+        first_field.field.dim().2,
+    ));
+
+    // Write fields
+    for (name, field) in &param_bag.param_fields {
+        let path = format!("/fields/{}", name);
+
+        // Since we assume all fields have the same bounding box, check that it's actually the
+        // case
+        if !field.has_same_box(first_field) {
+            warn!("field {} doesn't have the same bounding box as the first field, this may lead to inconsistencies", name);
+        }
+
+        {
+            let path = format!("{}/data", path);
+            let field = field.field.index_axis(Axis(3), 0);
+            std_layout.assign(&field);
+
+            let dim: (usize, usize, usize) = std_layout.dim().into();
+            let dataset = file.new_dataset::<u8>().gzip(6).create(&path, dim)?;
+            dataset.write(std_layout.view())?;
+        }
+
+        // Bounding box
+        file.new_dataset::<f64>()
+            .create(&format!("{}/bounding_box_min", path), (3,))?
+            .write(&[
+                field.field_box_mm_min_x,
+                field.field_box_mm_min_y,
+                field.field_box_mm_min_z,
+            ])?;
+        file.new_dataset::<f64>()
+            .create(&format!("{}/bounding_box_max", path), (3,))?
+            .write(&[
+                field.field_box_mm_max_x,
+                field.field_box_mm_max_y,
+                field.field_box_mm_max_z,
+            ])?;
+    }
+
+    // Write array params
+    for (name, array) in &param_bag.param_arrays {
+        let path = format!("/arrays/{}", name);
+
+        match &array.values {
+            ParamArrayStorage::Bool(value) => {
+                file.new_dataset::<u8>()
+                    .gzip(6)
+                    .create(&path, (value.len(),))?
+                    .write(
+                        &value
+                            .iter()
+                            .map(|b| if *b { 1 } else { 0 })
+                            .collect::<Vec<_>>(),
+                    )?;
+            }
+            ParamArrayStorage::Float(value) => {
+                file.new_dataset::<f64>()
+                    .gzip(6)
+                    .create(&path, (value.len(),))?
+                    .write(&value[..])?;
+            }
+            _ => {}
+        }
+    }
+
+    // Write params
+    for (name, param) in &param_bag.params {
+        let path = format!("/parameters/{}", name);
+
+        match param {
+            Param::Bool(value) => {
+                file.new_dataset::<u8>()
+                    .create(&path, (1,))?
+                    .write(&[if *value { 1 } else { 0 }])?;
+            }
+            Param::Float(value) => {
+                file.new_dataset::<f64>()
+                    .create(&path, (1,))?
+                    .write(&[*value])?;
+            }
+            _ => {}
+        }
+    }
+
+    Ok(())
+}
+
+fn write_xdmf(
+    (x_offset, y_offset, z_offset): (f64, f64, f64),
+    param_bag: &ParamBag,
+    h5_file_name: &str,
+    dest: &Path,
+) -> Result<(), failure::Error> {
+    let mut meta = File::create(dest)?;
+
+    writeln!(meta, "<?xml version=\"1.0\" encoding=\"utf-8\" ?>")?;
+    writeln!(meta, "<!DOCTYPE Xdmf SYSTEM \"Xdmf.dtd\" []>")?;
+    writeln!(meta, "<Xdmf Version=\"2.0\">")?;
+    writeln!(meta, "  <Domain>")?;
+
+    // Assume all fields share the same grid
+    let first_field = param_bag.param_fields.iter().next().unwrap().1;
+
+    writeln!(meta, "    <Grid Name=\"root\" GridType=\"Collection\">")?;
+    writeln!(
+        meta,
+        "      <Grid Name=\"field_mesh\" GridType=\"Uniform\">"
+    )?;
+    writeln!(meta, "        <Topology Name=\"field_topo\" TopologyType=\"3DCoRectMesh\" NumberOfElements=\"{z} {y} {x}\" />",
+            x = first_field.field.dim().0 + 1,
+            y = first_field.field.dim().1 + 1,
+            z = first_field.field.dim().2 + 1)?;
+    writeln!(
+        meta,
+        "        <Geometry Name=\"field_geo\" Type=\"ORIGIN_DXDYDZ\">"
+    )?;
+
+    let x_scale = (first_field.field_box_mm_max_x - first_field.field_box_mm_min_x)
+        / first_field.field_sx as f64;
+    let y_scale = (first_field.field_box_mm_max_y - first_field.field_box_mm_min_y)
+        / first_field.field_sy as f64;
+    let z_scale = (first_field.field_box_mm_max_z - first_field.field_box_mm_min_z)
+        / first_field.field_sz as f64;
+
+    // TODO: Write this in HDF
+    writeln!(meta, "          <DataItem Format=\"XML\" Dimensions=\"3\">")?;
+    writeln!(
+        meta,
+        "            {z} {y} {x}",
+        x = x_offset + (first_field.field_box_mm_max_x - first_field.field_box_mm_min_x) / -2.0,
+        y = y_offset + (first_field.field_box_mm_max_y - first_field.field_box_mm_min_y) / -2.0,
+        z = z_offset + (first_field.field_box_mm_max_z - first_field.field_box_mm_min_z) / -2.0,
+    )?;
+    writeln!(meta, "          </DataItem>")?;
+    // TODO: Write this in HDF
+    writeln!(meta, "          <DataItem Format=\"XML\" Dimensions=\"3\">")?;
+    writeln!(
+        meta,
+        "            {z} {y} {x}",
+        x = x_scale,
+        y = y_scale,
+        z = z_scale,
+    )?;
+    writeln!(meta, "          </DataItem>")?;
+    writeln!(meta, "        </Geometry>")?;
+
+    // Write fields
+    for (name, field) in &param_bag.param_fields {
+        let path = format!("/fields/{}", name);
+
+        // Since we assume all fields have the same bounding box, check that it's actually the
+        // case
+        if !field.has_same_box(first_field) {
+            warn!("field {} doesn't have the same bounding box as the first field, this may lead to inconsistencies", name);
+        }
+
+        {
+            let path = format!("{}/data", path);
+            let dim: (usize, usize, usize, usize) = field.field.dim().into();
+
+            // Export all fields to XDMF
+            writeln!(
+                meta,
+                "        <Attribute Name=\"{name}\" AttributeType=\"Scalar\" Center=\"Cell\">",
+                name = name
+            )?;
+            writeln!(meta, "          <DataItem Dimensions=\"{z} {y} {x}\" Format=\"HDF5\" DataType=\"UInt\" Precision=\"1\">",
+                x = dim.0,
+                y = dim.1,
+                z = dim.2)?;
+            writeln!(meta, "            {}:{}", h5_file_name, path)?;
+            writeln!(meta, "          </DataItem>")?;
+            writeln!(meta, "        </Attribute>")?;
+        }
+    }
+
+    writeln!(meta, "      </Grid>")?;
+
+    // Write array params
+    // TODO: Support different array sizes
+    let first_array = param_bag
+        .param_arrays
+        .iter()
+        .max_by_key(|a| a.1.len())
+        .unwrap()
+        .1;
+    let array_x_scale = (first_field.field_box_mm_max_x - first_field.field_box_mm_min_x) / 1.0;
+    let array_y_scale = (first_field.field_box_mm_max_y - first_field.field_box_mm_min_y) / 1.0;
+    let array_z_scale = (first_field.field_box_mm_max_z - first_field.field_box_mm_min_z)
+        / first_array.len() as f64;
+
+    writeln!(
+        meta,
+        "      <Grid Name=\"array_mesh\" GridType=\"Uniform\">"
+    )?;
+    writeln!(meta, "        <Topology Name=\"array_topo\" TopologyType=\"3DCoRectMesh\" NumberOfElements=\"{z} {y} {x}\" />",
+            x = 1 + 1,
+            y = 1 + 1,
+            z = first_array.len() + 1)?;
+    writeln!(
+        meta,
+        "        <Geometry Name=\"array_geo\" Type=\"ORIGIN_DXDYDZ\">"
+    )?;
+
+    // TODO: Write this in HDF
+    writeln!(meta, "          <DataItem Format=\"XML\" Dimensions=\"3\">")?;
+    writeln!(
+        meta,
+        "            {z} {y} {x}",
+        x = x_offset + (first_field.field_box_mm_max_x - first_field.field_box_mm_min_x) / -2.0,
+        y = y_offset + (first_field.field_box_mm_max_y - first_field.field_box_mm_min_y) / -2.0,
+        z = z_offset + (first_field.field_box_mm_max_z - first_field.field_box_mm_min_z) / -2.0,
+    )?;
+    writeln!(meta, "          </DataItem>")?;
+    // TODO: Write this in HDF
+    writeln!(meta, "          <DataItem Format=\"XML\" Dimensions=\"3\">")?;
+    writeln!(
+        meta,
+        "            {z} {y} {x}",
+        x = array_x_scale,
+        y = array_y_scale,
+        z = array_z_scale,
+    )?;
+    writeln!(meta, "          </DataItem>")?;
+    writeln!(meta, "        </Geometry>")?;
+
+    for (name, array) in &param_bag.param_arrays {
+        let path = format!("/arrays/{}", name);
+
+        let mut xdmf_type = match &array.values {
+            ParamArrayStorage::Bool(_) => Some(("UInt", 1)),
+            ParamArrayStorage::Float(_) => Some(("Float", 8)),
+            _ => None,
+        };
+
+        if name != "infill_theta" {
+            xdmf_type = None;
+        }
+
+        if let Some((data_type, precision)) = xdmf_type {
+            writeln!(
+                meta,
+                "        <Attribute Name=\"{name}\" AttributeType=\"Scalar\" Center=\"Cell\">",
+                name = name
+            )?;
+            writeln!(meta, "          <DataItem Dimensions=\"{z} {y} {x}\" Format=\"HDF5\" DataType=\"{data_type}\" Precision=\"{precision}\">",
+                x = 1,
+                y = 1,
+                z = array.len(),
+                data_type = data_type,
+                precision = precision)?;
+            writeln!(meta, "            {}:{}", h5_file_name, path)?;
+            writeln!(meta, "          </DataItem>")?;
+            writeln!(meta, "        </Attribute>")?;
+        }
+    }
+
+    writeln!(meta, "      </Grid>")?;
+    writeln!(meta, "    </Grid>")?;
+    writeln!(meta, "  </Domain>")?;
+    writeln!(meta, "</Xdmf>")?;
+
+    Ok(())
+}
+
 #[paw::main]
 fn main(opts: Opts) -> Result<(), failure::Error> {
     env_logger::Builder::from_default_env()
@@ -427,275 +736,46 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
         }
     }
 
-    // Load geometry and compute origin
-    let (x_offset, y_offset, z_offset) = if let Some(mesh_path) = opts.mesh {
-        let mut mesh = File::open(mesh_path)?;
-        let mesh = stl_io::read_stl(&mut mesh)?;
-
-        let mut x_min = std::f32::MAX;
-        let mut y_min = std::f32::MAX;
-        let mut z_min = std::f32::MAX;
-        let mut x_max = std::f32::MIN;
-        let mut y_max = std::f32::MIN;
-        let mut z_max = std::f32::MIN;
-
-        for vertex in mesh.vertices {
-            x_min = vertex[0].min(x_min);
-            y_min = vertex[1].min(y_min);
-            z_min = vertex[2].min(z_min);
-            x_max = vertex[0].max(x_max);
-            y_max = vertex[1].max(y_max);
-            z_max = vertex[2].max(z_max);
-        }
-
-        (
-            ((x_min + x_max) / 2.0).into(),
-            ((y_min + y_max) / 2.0).into(),
-            ((z_min + z_max) / 2.0).into(),
-        )
-    } else {
-        (0.0f64, 0.0f64, 0.0f64)
-    };
-
-    // Write fields
-    let _e = hdf5::silence_errors();
-
     if let Some(output) = opts.output {
         let h5_file_name = output.file_name().unwrap().to_string_lossy();
 
-        let file = hdf5::File::create(&output)?;
-        let mut meta = File::create(output.with_extension("xdmf"))?;
+        // We only need 2 threads for now
+        rayon::ThreadPoolBuilder::new().num_threads(2).build_global()?;
 
-        writeln!(meta, "<?xml version=\"1.0\" encoding=\"utf-8\" ?>")?;
-        writeln!(meta, "<!DOCTYPE Xdmf SYSTEM \"Xdmf.dtd\" []>")?;
-        writeln!(meta, "<Xdmf Version=\"2.0\">")?;
-        writeln!(meta, "  <Domain>")?;
-
-        // Assume all fields share the same grid
-        let first_field = param_bag.param_fields.iter().next().unwrap().1;
-
-        writeln!(meta, "    <Grid Name=\"root\" GridType=\"Collection\">")?;
-        writeln!(
-            meta,
-            "      <Grid Name=\"field_mesh\" GridType=\"Uniform\">"
-        )?;
-        writeln!(meta, "        <Topology Name=\"field_topo\" TopologyType=\"3DCoRectMesh\" NumberOfElements=\"{z} {y} {x}\" />",
-            x = first_field.field.dim().0 + 1,
-            y = first_field.field.dim().1 + 1,
-            z = first_field.field.dim().2 + 1)?;
-        writeln!(
-            meta,
-            "        <Geometry Name=\"field_geo\" Type=\"ORIGIN_DXDYDZ\">"
-        )?;
-
-        let x_scale = (first_field.field_box_mm_max_x - first_field.field_box_mm_min_x)
-            / first_field.field_sx as f64;
-        let y_scale = (first_field.field_box_mm_max_y - first_field.field_box_mm_min_y)
-            / first_field.field_sy as f64;
-        let z_scale = (first_field.field_box_mm_max_z - first_field.field_box_mm_min_z)
-            / first_field.field_sz as f64;
-
-        // TODO: Write this in HDF
-        writeln!(meta, "          <DataItem Format=\"XML\" Dimensions=\"3\">")?;
-        writeln!(
-            meta,
-            "            {z} {y} {x}",
-            x = x_offset + (first_field.field_box_mm_max_x - first_field.field_box_mm_min_x) / -2.0,
-            y = y_offset + (first_field.field_box_mm_max_y - first_field.field_box_mm_min_y) / -2.0,
-            z = z_offset + (first_field.field_box_mm_max_z - first_field.field_box_mm_min_z) / -2.0,
-        )?;
-        writeln!(meta, "          </DataItem>")?;
-        // TODO: Write this in HDF
-        writeln!(meta, "          <DataItem Format=\"XML\" Dimensions=\"3\">")?;
-        writeln!(
-            meta,
-            "            {z} {y} {x}",
-            x = x_scale,
-            y = y_scale,
-            z = z_scale,
-        )?;
-        writeln!(meta, "          </DataItem>")?;
-        writeln!(meta, "        </Geometry>")?;
-
-        // For converting into standard layout
-        let mut std_layout = ndarray::Array3::<u8>::zeros((
-            first_field.field.dim().0,
-            first_field.field.dim().1,
-            first_field.field.dim().2,
-        ));
-
-        // Write fields
-        for (name, field) in &param_bag.param_fields {
-            let path = format!("/fields/{}", name);
-
-            // Since we assume all fields have the same bounding box, check that it's actually the
-            // case
-            if !field.has_same_box(first_field) {
-                warn!("field {} doesn't have the same bounding box as the first field, this may lead to inconsistencies", name);
-            }
-
+        let (xdmf, h5) = rayon::join(
             {
-                let path = format!("{}/data", path);
-                let field = field.field.index_axis(Axis(3), 0);
-                std_layout.assign(&field);
+                let mesh = opts.mesh.clone();
+                let output = (&output).clone();
+                let param_bag = (&param_bag).clone();
 
-                let dim: (usize, usize, usize) = std_layout.dim().into();
-                let dataset = file.new_dataset::<u8>().gzip(6).create(&path, dim)?;
-                dataset.write(std_layout.view())?;
+                move || -> Result<(), failure::Error> {
+                    // Load geometry and compute origin
+                    let (x_offset, y_offset, z_offset) = read_offsets(&mesh)?;
 
-                // Export all fields to XDMF
-                writeln!(
-                    meta,
-                    "        <Attribute Name=\"{name}\" AttributeType=\"Scalar\" Center=\"Cell\">",
-                    name = name
-                )?;
-                writeln!(meta, "          <DataItem Dimensions=\"{z} {y} {x}\" Format=\"HDF5\" DataType=\"UInt\" Precision=\"1\">",
-                x = dim.0,
-                y = dim.1,
-                z = dim.2)?;
-                writeln!(meta, "            {}:{}", h5_file_name, path)?;
-                writeln!(meta, "          </DataItem>")?;
-                writeln!(meta, "        </Attribute>")?;
-            }
+                    // Write XDMF
+                    write_xdmf(
+                        (x_offset, y_offset, z_offset),
+                        &param_bag,
+                        &h5_file_name,
+                        &output.with_extension("xdmf"),
+                    )?;
 
-            // Bounding box
-            file.new_dataset::<f64>()
-                .create(&format!("{}/bounding_box_min", path), (3,))?
-                .write(&[
-                    field.field_box_mm_min_x,
-                    field.field_box_mm_min_y,
-                    field.field_box_mm_min_z,
-                ])?;
-            file.new_dataset::<f64>()
-                .create(&format!("{}/bounding_box_max", path), (3,))?
-                .write(&[
-                    field.field_box_mm_max_x,
-                    field.field_box_mm_max_y,
-                    field.field_box_mm_max_z,
-                ])?;
-        }
-
-        writeln!(meta, "      </Grid>")?;
-
-        // Write array params
-        // TODO: Support different array sizes
-        let first_array = param_bag
-            .param_arrays
-            .iter()
-            .max_by_key(|a| a.1.len())
-            .unwrap()
-            .1;
-        let array_x_scale = (first_field.field_box_mm_max_x - first_field.field_box_mm_min_x) / 1.0;
-        let array_y_scale = (first_field.field_box_mm_max_y - first_field.field_box_mm_min_y) / 1.0;
-        let array_z_scale = (first_field.field_box_mm_max_z - first_field.field_box_mm_min_z)
-            / first_array.len() as f64;
-
-        writeln!(
-            meta,
-            "      <Grid Name=\"array_mesh\" GridType=\"Uniform\">"
-        )?;
-        writeln!(meta, "        <Topology Name=\"array_topo\" TopologyType=\"3DCoRectMesh\" NumberOfElements=\"{z} {y} {x}\" />",
-            x = 1 + 1,
-            y = 1 + 1,
-            z = first_array.len() + 1)?;
-        writeln!(
-            meta,
-            "        <Geometry Name=\"array_geo\" Type=\"ORIGIN_DXDYDZ\">"
-        )?;
-
-        // TODO: Write this in HDF
-        writeln!(meta, "          <DataItem Format=\"XML\" Dimensions=\"3\">")?;
-        writeln!(
-            meta,
-            "            {z} {y} {x}",
-            x = x_offset + (first_field.field_box_mm_max_x - first_field.field_box_mm_min_x) / -2.0,
-            y = y_offset + (first_field.field_box_mm_max_y - first_field.field_box_mm_min_y) / -2.0,
-            z = z_offset + (first_field.field_box_mm_max_z - first_field.field_box_mm_min_z) / -2.0,
-        )?;
-        writeln!(meta, "          </DataItem>")?;
-        // TODO: Write this in HDF
-        writeln!(meta, "          <DataItem Format=\"XML\" Dimensions=\"3\">")?;
-        writeln!(
-            meta,
-            "            {z} {y} {x}",
-            x = array_x_scale,
-            y = array_y_scale,
-            z = array_z_scale,
-        )?;
-        writeln!(meta, "          </DataItem>")?;
-        writeln!(meta, "        </Geometry>")?;
-
-        for (name, array) in &param_bag.param_arrays {
-            let path = format!("/arrays/{}", name);
-
-            let mut xdmf_type = match &array.values {
-                ParamArrayStorage::Bool(value) => {
-                    file.new_dataset::<u8>()
-                        .gzip(6)
-                        .create(&path, (value.len(),))?
-                        .write(
-                            &value
-                                .iter()
-                                .map(|b| if *b { 1 } else { 0 })
-                                .collect::<Vec<_>>(),
-                        )?;
-                    Some(("UInt", 1))
+                    Ok(())
                 }
-                ParamArrayStorage::Float(value) => {
-                    file.new_dataset::<f64>()
-                        .gzip(6)
-                        .create(&path, (value.len(),))?
-                        .write(&value[..])?;
-                    Some(("Float", 8))
+            },
+            {
+                let output = (&output).clone();
+                let param_bag = (&param_bag).clone();
+
+                move || {
+                    // Write HDF5
+                    write_hdf5(&output, &param_bag)
                 }
-                _ => None,
-            };
+            },
+        );
 
-            if name != "infill_theta" {
-                xdmf_type = None;
-            }
-
-            if let Some((data_type, precision)) = xdmf_type {
-                writeln!(
-                    meta,
-                    "        <Attribute Name=\"{name}\" AttributeType=\"Scalar\" Center=\"Cell\">",
-                    name = name
-                )?;
-                writeln!(meta, "          <DataItem Dimensions=\"{z} {y} {x}\" Format=\"HDF5\" DataType=\"{data_type}\" Precision=\"{precision}\">",
-                x = 1,
-                y = 1,
-                z = array.len(),
-                data_type = data_type,
-                precision = precision)?;
-                writeln!(meta, "            {}:{}", h5_file_name, path)?;
-                writeln!(meta, "          </DataItem>")?;
-                writeln!(meta, "        </Attribute>")?;
-            }
-        }
-
-        // Write params
-        for (name, param) in &param_bag.params {
-            let path = format!("/parameters/{}", name);
-
-            match param {
-                Param::Bool(value) => {
-                    file.new_dataset::<u8>()
-                        .create(&path, (1,))?
-                        .write(&[if *value { 1 } else { 0 }])?;
-                }
-                Param::Float(value) => {
-                    file.new_dataset::<f64>()
-                        .create(&path, (1,))?
-                        .write(&[*value])?;
-                }
-                _ => {}
-            }
-        }
-
-        writeln!(meta, "      </Grid>")?;
-        writeln!(meta, "    </Grid>")?;
-        writeln!(meta, "  </Domain>")?;
-        writeln!(meta, "</Xdmf>")?;
+        xdmf?;
+        h5?;
     }
 
     Ok(())
