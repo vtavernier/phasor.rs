@@ -107,13 +107,6 @@ impl Param {
             _ => panic!(),
         }
     }
-
-    fn as_str(&self) -> &str {
-        match self {
-            Self::String(value) => &value,
-            _ => panic!(),
-        }
-    }
 }
 
 impl Into<bool> for Param {
