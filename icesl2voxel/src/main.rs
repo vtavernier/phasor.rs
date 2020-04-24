@@ -250,6 +250,20 @@ struct ParamField {
     field: ndarray::Array4<u8>,
 }
 
+impl ParamField {
+    fn has_same_box(&self, other: &Self) -> bool {
+        self.field_sx == other.field_sx
+            && self.field_sy == other.field_sy
+            && self.field_sz == other.field_sz
+            && self.field_box_mm_min_x == other.field_box_mm_min_x
+            && self.field_box_mm_min_y == other.field_box_mm_min_y
+            && self.field_box_mm_min_z == other.field_box_mm_min_z
+            && self.field_box_mm_max_x == other.field_box_mm_max_x
+            && self.field_box_mm_max_y == other.field_box_mm_max_y
+            && self.field_box_mm_max_z == other.field_box_mm_max_z
+    }
+}
+
 #[derive(Default, Debug, Serialize, Deserialize)]
 struct ParamBag {
     param_fields: HashMap<String, ParamField>,
@@ -500,6 +514,12 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
         // Write fields
         for (name, field) in &param_bag.param_fields {
             let path = format!("/fields/{}", name);
+
+            // Since we assume all fields have the same bounding box, check that it's actually the
+            // case
+            if !field.has_same_box(first_field) {
+                warn!("field {} doesn't have the same bounding box as the first field, this may lead to inconsistencies", name);
+            }
 
             {
                 let field = field.field.index_axis(Axis(3), 0);
