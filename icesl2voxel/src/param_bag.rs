@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 
 use itertools::Itertools;
@@ -31,6 +31,7 @@ impl ParamBag {
 
     pub fn parse(src: &mut dyn std::io::Read) -> Result<Self, failure::Error> {
         let mut param_bag = ParamBag::new();
+        let mut field_names = HashSet::new();
 
         let parser = EventReader::new(src);
         for e in parser {
@@ -49,15 +50,26 @@ impl ParamBag {
                             .unwrap()
                             .as_str();
 
+                        debug!("adding field {}", name);
+                        field_names.insert(name.to_owned());
                         param_bag.add_field(&name, &attributes[..])?;
-                    }
-                    if let Some(attribute) = attributes
+                    } else if let Some(attribute) = attributes
                         .iter()
                         .find(|attr| attr.name.local_name == "value")
                     {
                         if let Some(captures) = ELEMENT_NAME_PARAM_RE.captures(&name.local_name) {
+                            // Discard values which are already fields
+                            if field_names.contains(captures.get(1).unwrap().as_str()) {
+                                continue;
+                            }
+
+                            if captures.get(2).unwrap().as_str() == "0" {
+                                debug!("adding array {}", &captures.get(1).unwrap().as_str());
+                            }
+
                             param_bag.add_array_item(&captures, &attribute.value)?;
                         } else {
+                            debug!("adding parameter {}", name.local_name);
                             param_bag.add_item(&name.local_name, &attribute.value)?;
                         }
                     } else {
