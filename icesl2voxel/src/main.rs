@@ -73,7 +73,14 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
     let file = File::open(&opts.input)?;
     let mut file = BufReader::new(file);
 
-    let param_bag = ParamBag::parse(&mut file)?;
+    let mut param_bag = ParamBag::parse(&mut file)?;
+
+    for force_field in &opts.force_field {
+        match param_bag.convert_to_field(force_field) {
+            Ok(_) => info!("converted {} to a field", force_field),
+            Err(error) => error!("could not convert {} to a field: {}", force_field, error),
+        }
+    }
 
     if let Some(output) = opts.output {
         let h5_file_name = output.file_name().unwrap().to_string_lossy();

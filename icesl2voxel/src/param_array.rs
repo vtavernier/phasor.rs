@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::convert::TryFrom;
 
 use serde_derive::{Deserialize, Serialize};
@@ -116,6 +117,17 @@ impl ParamArray {
 
     pub fn len(&self) -> usize {
         self.values.len()
+    }
+
+    pub fn as_f64_slice(&self) -> Option<Cow<[f64]>> {
+        match &self.values {
+            ParamArrayStorage::Float(vec) => Some(Cow::Borrowed(&vec[..])),
+            ParamArrayStorage::Bool(vec) => {
+                let other: Vec<_> = vec.iter().map(|x| if *x { 1. } else { 0. }).collect();
+                Some(Cow::Owned(other))
+            }
+            _ => None,
+        }
     }
 
     pub fn write_hdf5(&self, path: &str, file: &hdf5::File) -> Result<(), failure::Error> {

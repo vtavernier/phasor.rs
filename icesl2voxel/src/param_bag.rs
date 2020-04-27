@@ -74,6 +74,33 @@ impl ParamBag {
         Ok(param_bag)
     }
 
+    pub fn convert_to_field(&mut self, name: &str) -> Result<(), failure::Error> {
+        if let Some(array) = self.param_arrays.get(name) {
+            // Insert converted field
+            if let Some(field) = self
+                .param_fields
+                .values()
+                .next()
+                .and_then(|first_field| first_field.derive_from_array(&array))
+            {
+                // Add field to list
+                self.param_fields.insert(name.to_owned(), field);
+
+                // Delete array now that it has been converted
+                self.param_arrays.remove(name);
+
+                Ok(())
+            } else {
+                Err(failure::err_msg(format!(
+                    "cannot derive field from param array {}",
+                    name
+                )))
+            }
+        } else {
+            Err(failure::err_msg(format!("param array {} not found", name)))
+        }
+    }
+
     fn add_item(&mut self, name: &str, value: &str) -> Result<(), failure::Error> {
         self.params.insert(name.to_owned(), Param::try_from(value)?);
         Ok(())
@@ -223,30 +250,34 @@ impl ParamBag {
         // Write fields
         for (name, field) in &self.param_fields {
             let path = format!("/fields/{}", name);
+            if let Some((data_type, precision)) = field.xdmf_type() {
+                // Since we assume all fields have the same bounding box, check that it's actually the
+                // case
+                if !field.has_same_box(first_field) {
+                    warn!("field {} doesn't have the same bounding box as the first field, this may lead to inconsistencies", name);
+                }
 
-            // Since we assume all fields have the same bounding box, check that it's actually the
-            // case
-            if !field.has_same_box(first_field) {
-                warn!("field {} doesn't have the same bounding box as the first field, this may lead to inconsistencies", name);
-            }
+                {
+                    let path = format!("{}/data", path);
+                    let dim: (usize, usize, usize, usize) = field.dim().into();
 
-            {
-                let path = format!("{}/data", path);
-                let dim: (usize, usize, usize, usize) = field.dim().into();
-
-                // Export all fields to XDMF
-                writeln!(
-                    dest,
-                    "        <Attribute Name=\"{name}\" AttributeType=\"Scalar\" Center=\"Cell\">",
-                    name = name
-                )?;
-                writeln!(dest, "          <DataItem Dimensions=\"{z} {y} {x}\" Format=\"HDF5\" DataType=\"UInt\" Precision=\"1\">",
-                    x = dim.0,
-                    y = dim.1,
-                    z = dim.2)?;
-                writeln!(dest, "            {}:{}", h5_file_name, path)?;
-                writeln!(dest, "          </DataItem>")?;
-                writeln!(dest, "        </Attribute>")?;
+                    // Export all fields to XDMF
+                    writeln!(
+                        dest,
+                        "        <Attribute Name=\"{name}\" AttributeType=\"Scalar\" Center=\"Cell\">",
+                        name = name
+                    )?;
+                    writeln!(dest, "          <DataItem Dimensions=\"{z} {y} {x}\" Format=\"HDF5\" DataType=\"{data_type}\" Precision=\"{precision}\">",
+                        x = dim.2,
+                        y = dim.1,
+                        z = dim.0,
+                        data_type = data_type,
+                        precision = precision,
+                    )?;
+                    writeln!(dest, "            {}:{}", h5_file_name, path)?;
+                    writeln!(dest, "          </DataItem>")?;
+                    writeln!(dest, "        </Attribute>")?;
+                }
             }
         }
 
