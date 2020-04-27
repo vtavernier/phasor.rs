@@ -179,7 +179,7 @@ impl ParamBag {
             let theta = *theta / 360.0 * 2.0 * std::f64::consts::PI;
             let phi = *phi / 360.0 * 2.0 * std::f64::consts::PI;
 
-            vec[0] = *r * phi.cos() * theta.sin();
+            vec[0] = *r * phi.cos() * -theta.sin();
             vec[1] = *r * phi.cos() * -theta.cos();
             vec[2] = *r * phi.sin();
         });
