@@ -227,7 +227,7 @@ impl ParamField {
             // z in 0..src.len() range
             let src_z = norm_z * (src.len() + 1) as f64 - 0.5;
             // z idx in src
-            let src_idx = norm_z.floor() as usize;
+            let src_idx = src_z.floor() as usize;
             let src_idx_p1 = (src_idx + 1).min(src.len());
             // Linear interpolation
             let val = src[src_idx] * (1.0 - src_z.fract()) + src[src_idx_p1] * src_z.fract();
