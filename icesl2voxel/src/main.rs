@@ -13,11 +13,31 @@
 #[macro_use]
 extern crate log;
 
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
 use structopt::StructOpt;
+
+pub struct DirectionField {
+    output_name: String,
+    coords: Vec<String>,
+}
+
+impl std::str::FromStr for DirectionField {
+    type Err = failure::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let kv_parts: Vec<_> = s.splitn(2, '=').collect();
+        let coord_parts: Vec<_> = kv_parts[1].splitn(2, ',').map(str::to_owned).collect();
+
+        Ok(Self {
+            output_name: kv_parts[0].to_owned(),
+            coords: coord_parts,
+        })
+    }
+}
 
 #[derive(StructOpt)]
 struct Opts {
@@ -36,6 +56,27 @@ struct Opts {
     /// List of array parameters to force as fields
     #[structopt(long)]
     force_field: Vec<String>,
+
+    /// List of fields to assemble as spherical vector fields
+    #[structopt(long)]
+    assemble_spherical: Vec<DirectionField>,
+}
+
+impl Opts {
+    pub fn get_force_field(&self) -> HashSet<String> {
+        let mut res =
+            HashSet::with_capacity(self.force_field.len() + self.assemble_spherical.len() * 3);
+
+        res.extend(self.force_field.iter().cloned());
+        res.extend(
+            self.assemble_spherical
+                .iter()
+                .flat_map(|df| df.coords.iter())
+                .cloned(),
+        );
+
+        res
+    }
 }
 
 mod geometry;
@@ -75,10 +116,30 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
 
     let mut param_bag = ParamBag::parse(&mut file)?;
 
-    for force_field in &opts.force_field {
-        match param_bag.convert_to_field(force_field) {
-            Ok(_) => info!("converted {} to a field", force_field),
-            Err(error) => error!("could not convert {} to a field: {}", force_field, error),
+    for force_field in &opts.get_force_field() {
+        if param_bag.is_field(force_field) {
+            // Nothing to do
+        } else {
+            match param_bag.convert_to_field(force_field) {
+                Ok(_) => info!("converted {} to a field", force_field),
+                Err(error) => error!("could not convert {} to a field: {}", force_field, error),
+            }
+        }
+    }
+
+    for assemble_spherical in &opts.assemble_spherical {
+        match param_bag.assemble_spherical(
+            &assemble_spherical.output_name,
+            &assemble_spherical.coords[..],
+        ) {
+            Ok(_) => info!(
+                "assembled {} as spherical vector field",
+                assemble_spherical.output_name
+            ),
+            Err(error) => error!(
+                "could not assemble {}: {}",
+                assemble_spherical.output_name, error
+            ),
         }
     }
 

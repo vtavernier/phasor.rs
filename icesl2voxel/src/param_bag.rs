@@ -1,8 +1,10 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 
 use itertools::Itertools;
 use lazy_static::lazy_static;
+use ndarray::prelude::*;
 use regex::Regex;
 use serde_derive::{Deserialize, Serialize};
 use xml::reader::{EventReader, XmlEvent};
@@ -99,6 +101,81 @@ impl ParamBag {
         } else {
             Err(failure::err_msg(format!("param array {} not found", name)))
         }
+    }
+
+    pub fn is_field(&self, name: &str) -> bool {
+        self.param_fields.contains_key(name)
+    }
+
+    pub fn assemble_spherical(
+        &mut self,
+        name: &str,
+        source_names: &[impl AsRef<str>],
+    ) -> Result<&ParamField, failure::Error> {
+        let sources: Result<Vec<&ParamField>, _> = source_names
+            .iter()
+            .map(|src_name| {
+                self.param_fields.get(src_name.as_ref()).ok_or_else(|| {
+                    failure::err_msg(format!("{} field not found", src_name.as_ref()))
+                })
+            })
+            .collect();
+
+        let sources = sources?;
+
+        let dim = sources[0].dim();
+        let mut data = ndarray::Array4::zeros((dim.0, dim.1, dim.2, 3));
+
+        // Generate array from spherical coordinates
+        let param_r = if sources.len() >= 3 {
+            sources[0].as_f64_array(1.0).ok_or_else(|| {
+                failure::err_msg(format!(
+                    "could not convert {} field to float",
+                    source_names[0].as_ref()
+                ))
+            })?
+        } else {
+            Cow::Owned(ndarray::Array3::ones((dim.0, dim.1, dim.2)))
+        };
+
+        let param_theta = if sources.len() >= 1 {
+            let idx = if sources.len() >= 3 { 1 } else { 0 };
+            sources[idx].as_f64_array(180.0).ok_or_else(|| {
+                failure::err_msg(format!(
+                    "could not convert {} field to float",
+                    source_names[idx].as_ref()
+                ))
+            })?
+        } else {
+            Cow::Owned(ndarray::Array3::zeros((dim.0, dim.1, dim.2)))
+        };
+
+        let param_phi = if sources.len() >= 2 {
+            let idx = if sources.len() >= 3 { 2 } else { 1 };
+            sources[idx].as_f64_array(360.0).ok_or_else(|| {
+                failure::err_msg(format!(
+                    "could not convert {} field to float",
+                    source_names[idx].as_ref()
+                ))
+            })?
+        } else {
+            Cow::Owned(ndarray::Array3::zeros((dim.0, dim.1, dim.2)))
+        };
+
+        azip!((mut vec in data.lanes_mut(Axis(3)), r in &*param_r, theta in &*param_theta, phi in &*param_phi)
+        {
+            let theta = *theta / 360.0 * 2.0 * std::f64::consts::PI;
+            let phi = *phi / 360.0 * 2.0 * std::f64::consts::PI;
+
+            vec[0] = *r * phi.cos() * theta.sin();
+            vec[1] = *r * phi.cos() * -theta.cos();
+            vec[2] = *r * phi.sin();
+        });
+
+        let field = sources[0].derive_vec3_from_field(data);
+
+        self.param_fields.insert(name.to_owned(), field);
+        Ok(self.param_fields.get(name).unwrap())
     }
 
     fn add_item(&mut self, name: &str, value: &str) -> Result<(), failure::Error> {
@@ -250,7 +327,7 @@ impl ParamBag {
         // Write fields
         for (name, field) in &self.param_fields {
             let path = format!("/fields/{}", name);
-            if let Some((data_type, precision)) = field.xdmf_type() {
+            if let Some((data_type, precision, components)) = field.xdmf_type() {
                 // Since we assume all fields have the same bounding box, check that it's actually the
                 // case
                 if !field.has_same_box(first_field) {
@@ -264,15 +341,25 @@ impl ParamBag {
                     // Export all fields to XDMF
                     writeln!(
                         dest,
-                        "        <Attribute Name=\"{name}\" AttributeType=\"Scalar\" Center=\"Cell\">",
-                        name = name
+                        "        <Attribute Name=\"{name}\" AttributeType=\"{attribute_type}\" Center=\"Cell\">",
+                        name = name,
+                        attribute_type = if components == 1 {
+                            "Scalar"
+                        } else {
+                            "Vector"
+                        }
                     )?;
-                    writeln!(dest, "          <DataItem Dimensions=\"{z} {y} {x}\" Format=\"HDF5\" DataType=\"{data_type}\" Precision=\"{precision}\">",
+                    writeln!(dest, "          <DataItem Dimensions=\"{z} {y} {x}{d}\" Format=\"HDF5\" DataType=\"{data_type}\" Precision=\"{precision}\">",
                         x = dim.2,
                         y = dim.1,
                         z = dim.0,
                         data_type = data_type,
                         precision = precision,
+                        d = if components == 1 {
+                            "".to_owned()
+                        } else {
+                            format!(" {}", components)
+                        },
                     )?;
                     writeln!(dest, "            {}:{}", h5_file_name, path)?;
                     writeln!(dest, "          </DataItem>")?;

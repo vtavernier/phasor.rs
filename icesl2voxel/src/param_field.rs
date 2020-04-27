@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use ndarray::prelude::*;
 use serde_derive::{Deserialize, Serialize};
 
@@ -7,12 +9,14 @@ use super::param_array::ParamArray;
 enum FieldStorage {
     Byte(ndarray::Array4<u8>),
     Float(ndarray::Array3<f64>),
+    Vec3(ndarray::Array4<f64>),
 }
 
 impl FieldStorage {
     fn as_f64_slice_mut(&mut self) -> Option<&mut [f64]> {
         match self {
             Self::Float(array) => array.as_slice_mut(),
+            Self::Vec3(array) => array.as_slice_mut(),
             _ => None,
         }
     }
@@ -31,6 +35,7 @@ impl FieldStorage {
                 let d = array.dim();
                 (d.0, d.1, d.2, 0)
             }
+            Self::Vec3(array) => array.dim(),
         }
     }
 
@@ -55,15 +60,22 @@ impl FieldStorage {
                     .create(&path, array.dim())?
                     .write(array.view())?;
             }
+            Self::Vec3(array) => {
+                file.new_dataset::<f64>()
+                    .gzip(6)
+                    .create(&path, array.dim())?
+                    .write(array.view())?;
+            }
         }
 
         Ok(())
     }
 
-    fn xdmf_type(&self) -> Option<(&'static str, usize)> {
+    fn xdmf_type(&self) -> Option<(&'static str, usize, usize)> {
         match self {
-            Self::Byte(_) => Some(("UInt", 1)),
-            Self::Float(_) => Some(("Float", 8)),
+            Self::Byte(_) => Some(("UInt", 1, 1)),
+            Self::Float(_) => Some(("Float", 8, 1)),
+            Self::Vec3(array) => Some(("Float", 8, array.dim().3)),
         }
     }
 }
@@ -176,8 +188,32 @@ impl ParamField {
         Ok(())
     }
 
-    pub fn xdmf_type(&self) -> Option<(&'static str, usize)> {
+    /// Returns (item_type, precision, components)
+    pub fn xdmf_type(&self) -> Option<(&'static str, usize, usize)> {
         self.field.xdmf_type()
+    }
+
+    pub fn as_f64_array(&self, byte_scale: f64) -> Option<Cow<ndarray::Array3<f64>>> {
+        match &self.field {
+            FieldStorage::Float(array) => Some(Cow::Borrowed(array)),
+            FieldStorage::Byte(array) => {
+                let dim = self.dim();
+                let mut mapped = ndarray::Array3::zeros((dim.0, dim.1, dim.2));
+
+                // Scale u8 into [0, 1] f32
+                azip!((f in &mut mapped, x in &array.index_axis(Axis(3), 0)) *f = (*x as f64 / 255.0) * byte_scale);
+
+                Some(Cow::Owned(mapped))
+            }
+            _ => None,
+        }
+    }
+
+    pub fn derive_vec3_from_field(&self, data: ndarray::Array4<f64>) -> Self {
+        Self {
+            field: FieldStorage::Vec3(data),
+            ..*self
+        }
     }
 
     pub fn derive_from_array(&self, array: &ParamArray) -> Option<Self> {
