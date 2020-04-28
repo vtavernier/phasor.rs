@@ -51,7 +51,7 @@ struct Opts {
 
     /// HDF5 file path for output
     #[structopt(short, long)]
-    output: Option<PathBuf>,
+    output: PathBuf,
 
     /// List of array parameters to force as fields
     #[structopt(long)]
@@ -143,22 +143,20 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
         }
     }
 
-    if let Some(output) = &opts.output {
-        let h5_file_name = output.file_name().unwrap().to_string_lossy();
+    let h5_file_name = opts.output.file_name().unwrap().to_string_lossy();
 
-        let offsets = geometry::read_offsets(&opts.mesh)?;
+    let offsets = geometry::read_offsets(&opts.mesh)?;
 
-        // Write XDMF
-        write_xdmf(
-            offsets,
-            &param_bag,
-            &h5_file_name,
-            &output.with_extension("xdmf"),
-        )?;
+    // Write XDMF
+    write_xdmf(
+        offsets,
+        &param_bag,
+        &h5_file_name,
+        &opts.output.with_extension("xdmf"),
+    )?;
 
-        // Write HDF5
-        write_hdf5(&output, &param_bag)?;
-    }
+    // Write HDF5
+    write_hdf5(&opts.output, &param_bag)?;
 
     Ok(())
 }
