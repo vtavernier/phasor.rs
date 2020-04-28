@@ -6,7 +6,7 @@ be loaded inside Paraview for visualization or from other code for further proce
 ### Usage
 
     # Extract fields and parameters from file.xml into file.h5 (and file.xdmf)
-    cargo run -- -i file.xml -o file.h5
+    cargo run --release -- -i file.xml -o file.h5
 
 ### Author
 

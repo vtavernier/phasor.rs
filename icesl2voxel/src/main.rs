@@ -143,48 +143,21 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
         }
     }
 
-    if let Some(output) = opts.output {
+    if let Some(output) = &opts.output {
         let h5_file_name = output.file_name().unwrap().to_string_lossy();
 
-        // We only need 2 threads for now
-        rayon::ThreadPoolBuilder::new()
-            .num_threads(2)
-            .build_global()?;
+        let offsets = geometry::read_offsets(&opts.mesh)?;
 
-        let (xdmf, h5) = rayon::join(
-            {
-                let mesh = opts.mesh.clone();
-                let output = (&output).clone();
-                let param_bag = (&param_bag).clone();
+        // Write XDMF
+        write_xdmf(
+            offsets,
+            &param_bag,
+            &h5_file_name,
+            &output.with_extension("xdmf"),
+        )?;
 
-                move || -> Result<(), failure::Error> {
-                    // Load geometry and compute origin
-                    let (x_offset, y_offset, z_offset) = geometry::read_offsets(&mesh)?;
-
-                    // Write XDMF
-                    write_xdmf(
-                        (x_offset, y_offset, z_offset),
-                        &param_bag,
-                        &h5_file_name,
-                        &output.with_extension("xdmf"),
-                    )?;
-
-                    Ok(())
-                }
-            },
-            {
-                let output = (&output).clone();
-                let param_bag = (&param_bag).clone();
-
-                move || {
-                    // Write HDF5
-                    write_hdf5(&output, &param_bag)
-                }
-            },
-        );
-
-        xdmf?;
-        h5?;
+        // Write HDF5
+        write_hdf5(&output, &param_bag)?;
     }
 
     Ok(())
