@@ -307,21 +307,20 @@ impl ParamBag {
             "        <Geometry Name=\"field_geo\" Type=\"ORIGIN_DXDYDZ\">"
         )?;
 
-        let x_scale = (first_field.field_box_mm_max_x - first_field.field_box_mm_min_x)
-            / first_field.dim().2 as f64;
-        let y_scale = (first_field.field_box_mm_max_y - first_field.field_box_mm_min_y)
-            / first_field.dim().1 as f64;
-        let z_scale = (first_field.field_box_mm_max_z - first_field.field_box_mm_min_z)
-            / first_field.dim().0 as f64;
+        let box_size = first_field.field_box_mm.size();
+
+        let x_scale = box_size.x / first_field.dim().2 as f64;
+        let y_scale = box_size.y / first_field.dim().1 as f64;
+        let z_scale = box_size.z / first_field.dim().0 as f64;
 
         // TODO: Write this in HDF
         writeln!(dest, "          <DataItem Format=\"XML\" Dimensions=\"3\">")?;
         writeln!(
             dest,
             "            {z} {y} {x}",
-            x = x_offset + (first_field.field_box_mm_max_x - first_field.field_box_mm_min_x) / -2.0,
-            y = y_offset + (first_field.field_box_mm_max_y - first_field.field_box_mm_min_y) / -2.0,
-            z = z_offset + (first_field.field_box_mm_max_z - first_field.field_box_mm_min_z) / -2.0,
+            x = x_offset + box_size.x / -2.0,
+            y = y_offset + box_size.y / -2.0,
+            z = z_offset + box_size.z / -2.0,
         )?;
         writeln!(dest, "          </DataItem>")?;
         // TODO: Write this in HDF
@@ -393,13 +392,9 @@ impl ParamBag {
                 let path = format!("/arrays/{}", name);
 
                 if scale.is_none() {
-                    let array_x_scale =
-                        (first_field.field_box_mm_max_x - first_field.field_box_mm_min_x) / 1.0;
-                    let array_y_scale =
-                        (first_field.field_box_mm_max_y - first_field.field_box_mm_min_y) / 1.0;
-                    let array_z_scale = (first_field.field_box_mm_max_z
-                        - first_field.field_box_mm_min_z)
-                        / len as f64;
+                    let array_x_scale = box_size.x / 1.0;
+                    let array_y_scale = box_size.y / 1.0;
+                    let array_z_scale = box_size.z / len as f64;
 
                     writeln!(
                         dest,
@@ -423,15 +418,9 @@ impl ParamBag {
                     writeln!(
                         dest,
                         "            {z} {y} {x}",
-                        x = x_offset
-                            + (first_field.field_box_mm_max_x - first_field.field_box_mm_min_x)
-                                / -2.0,
-                        y = y_offset
-                            + (first_field.field_box_mm_max_y - first_field.field_box_mm_min_y)
-                                / -2.0,
-                        z = z_offset
-                            + (first_field.field_box_mm_max_z - first_field.field_box_mm_min_z)
-                                / -2.0,
+                        x = x_offset + box_size.x / -2.0,
+                        y = y_offset + box_size.y / -2.0,
+                        z = z_offset + box_size.z / -2.0,
                     )?;
                     writeln!(dest, "          </DataItem>")?;
                     // TODO: Write this in HDF

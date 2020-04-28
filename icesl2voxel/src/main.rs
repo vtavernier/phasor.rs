@@ -85,6 +85,7 @@ mod param_array;
 mod param_bag;
 mod param_field;
 mod parse;
+mod utils;
 
 use param_bag::ParamBag;
 

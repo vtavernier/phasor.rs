@@ -4,6 +4,7 @@ use ndarray::prelude::*;
 use serde_derive::{Deserialize, Serialize};
 
 use super::param_array::ParamArray;
+use super::utils::BoundingBox;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 enum FieldStorage {
@@ -82,12 +83,7 @@ impl FieldStorage {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParamField {
-    pub field_box_mm_min_x: f64,
-    pub field_box_mm_min_y: f64,
-    pub field_box_mm_min_z: f64,
-    pub field_box_mm_max_x: f64,
-    pub field_box_mm_max_y: f64,
-    pub field_box_mm_max_z: f64,
+    pub field_box_mm: BoundingBox,
     field: FieldStorage,
 }
 
@@ -123,12 +119,14 @@ impl ParamField {
 
         // Parse field parameters
         let mut field = ParamField {
-            field_box_mm_min_x: Self::attr_into(attributes, "field_box_mm_min_x"),
-            field_box_mm_min_y: Self::attr_into(attributes, "field_box_mm_min_y"),
-            field_box_mm_min_z: Self::attr_into(attributes, "field_box_mm_min_z"),
-            field_box_mm_max_x: Self::attr_into(attributes, "field_box_mm_max_x"),
-            field_box_mm_max_y: Self::attr_into(attributes, "field_box_mm_max_y"),
-            field_box_mm_max_z: Self::attr_into(attributes, "field_box_mm_max_z"),
+            field_box_mm: BoundingBox {
+                min_x: Self::attr_into(attributes, "field_box_mm_min_x"),
+                min_y: Self::attr_into(attributes, "field_box_mm_min_y"),
+                min_z: Self::attr_into(attributes, "field_box_mm_min_z"),
+                max_x: Self::attr_into(attributes, "field_box_mm_max_x"),
+                max_y: Self::attr_into(attributes, "field_box_mm_max_y"),
+                max_z: Self::attr_into(attributes, "field_box_mm_max_z"),
+            },
             // Allocate array
             // Big endian order: fastest dimension varying last
             field: FieldStorage::Byte(ndarray::Array4::zeros((field_sz, field_sy, field_sx, 4))),
@@ -148,12 +146,7 @@ impl ParamField {
         self.dim().0 == other.dim().0
             && self.dim().1 == other.dim().1
             && self.dim().2 == other.dim().2
-            && self.field_box_mm_min_x == other.field_box_mm_min_x
-            && self.field_box_mm_min_y == other.field_box_mm_min_y
-            && self.field_box_mm_min_z == other.field_box_mm_min_z
-            && self.field_box_mm_max_x == other.field_box_mm_max_x
-            && self.field_box_mm_max_y == other.field_box_mm_max_y
-            && self.field_box_mm_max_z == other.field_box_mm_max_z
+            && self.field_box_mm == other.field_box_mm
     }
 
     pub fn dim(&self) -> (usize, usize, usize, usize) {
@@ -173,16 +166,16 @@ impl ParamField {
         file.new_dataset::<f64>()
             .create(&format!("{}/bounding_box_min", path), (3,))?
             .write(&[
-                self.field_box_mm_min_x,
-                self.field_box_mm_min_y,
-                self.field_box_mm_min_z,
+                self.field_box_mm.min_x,
+                self.field_box_mm.min_y,
+                self.field_box_mm.min_z,
             ])?;
         file.new_dataset::<f64>()
             .create(&format!("{}/bounding_box_max", path), (3,))?
             .write(&[
-                self.field_box_mm_max_x,
-                self.field_box_mm_max_y,
-                self.field_box_mm_max_z,
+                self.field_box_mm.max_x,
+                self.field_box_mm.max_y,
+                self.field_box_mm.max_z,
             ])?;
 
         Ok(())
