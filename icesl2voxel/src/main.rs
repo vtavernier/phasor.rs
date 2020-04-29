@@ -114,7 +114,6 @@ fn write_xdmf(
 fn main(opts: Opts) -> Result<(), failure::Error> {
     env_logger::Builder::from_default_env()
         .format_timestamp(None)
-        .format_module_path(false)
         .init();
 
     let file = File::open(&opts.input)?;
