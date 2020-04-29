@@ -52,7 +52,7 @@ impl ParamBag {
 
                         debug!("adding field {}", name);
                         field_names.insert(name.to_owned());
-                        param_bag.add_field(&name, &attributes[..])?;
+                        param_bag.add_parsed_field(&name, &attributes[..])?;
                     } else if let Some(attribute) = attributes
                         .iter()
                         .find(|attr| attr.name.local_name == "value")
@@ -140,7 +140,7 @@ impl ParamBag {
 
         // Generate array from spherical coordinates
         let param_r = if sources.len() >= 3 {
-            sources[0].as_f64_array(1.0).ok_or_else(|| {
+            sources[0].as_f32_array(1.0).ok_or_else(|| {
                 failure::err_msg(format!(
                     "could not convert {} field to float",
                     source_names[0].as_ref()
@@ -152,7 +152,7 @@ impl ParamBag {
 
         let param_theta = if sources.len() >= 1 {
             let idx = if sources.len() >= 3 { 1 } else { 0 };
-            sources[idx].as_f64_array(180.0).ok_or_else(|| {
+            sources[idx].as_f32_array(180.0).ok_or_else(|| {
                 failure::err_msg(format!(
                     "could not convert {} field to float",
                     source_names[idx].as_ref()
@@ -164,7 +164,7 @@ impl ParamBag {
 
         let param_phi = if sources.len() >= 2 {
             let idx = if sources.len() >= 3 { 2 } else { 1 };
-            sources[idx].as_f64_array(360.0).ok_or_else(|| {
+            sources[idx].as_f32_array(360.0).ok_or_else(|| {
                 failure::err_msg(format!(
                     "could not convert {} field to float",
                     source_names[idx].as_ref()
@@ -176,8 +176,8 @@ impl ParamBag {
 
         azip!((mut vec in data.lanes_mut(Axis(3)), r in &*param_r, theta in &*param_theta, phi in &*param_phi)
         {
-            let theta = *theta / 360.0 * 2.0 * std::f64::consts::PI;
-            let phi = *phi / 360.0 * 2.0 * std::f64::consts::PI;
+            let theta = *theta / 360.0 * 2.0 * std::f32::consts::PI;
+            let phi = *phi / 360.0 * 2.0 * std::f32::consts::PI;
 
             vec[0] = *r * phi.cos() * -theta.sin();
             vec[1] = *r * phi.cos() * -theta.cos();
@@ -195,14 +195,17 @@ impl ParamBag {
         Ok(())
     }
 
-    fn add_field(
+    pub fn add_field(&mut self, name: &str, field: ParamField) {
+        self.param_fields.insert(name.to_owned(), field);
+    }
+
+    fn add_parsed_field(
         &mut self,
         name: &str,
         attributes: &[xml::attribute::OwnedAttribute],
     ) -> Result<(), failure::Error> {
         // Add to known fields
-        self.param_fields
-            .insert(name.to_owned(), ParamField::from_attr(attributes)?);
+        self.add_field(name, ParamField::from_attr(attributes)?);
         Ok(())
     }
 
@@ -243,12 +246,6 @@ impl ParamBag {
         for (name, field) in &self.param_fields {
             let path = format!("/fields/{}", name);
 
-            // Since we assume all fields have the same bounding box, check that it's actually the
-            // case
-            if !field.has_same_box(first_field) {
-                warn!("field {} doesn't have the same bounding box as the first field, this may lead to inconsistencies", name);
-            }
-
             field.write_hdf5(&path, &file, &mut std_layout)?;
         }
 
@@ -281,7 +278,7 @@ impl ParamBag {
 
     pub fn write_xdmf(
         &self,
-        (x_offset, y_offset, z_offset): (f64, f64, f64),
+        offsets: nalgebra::Vector3<f32>,
         h5_file_name: &str,
         dest: &mut dyn std::io::Write,
     ) -> std::io::Result<()> {
@@ -290,96 +287,126 @@ impl ParamBag {
         writeln!(dest, "<Xdmf Version=\"2.0\">")?;
         writeln!(dest, "  <Domain>")?;
 
-        // Assume all fields share the same grid
-        let first_field = self.param_fields.iter().next().unwrap().1;
-
         writeln!(dest, "    <Grid Name=\"root\" GridType=\"Collection\">")?;
-        writeln!(
-            dest,
-            "      <Grid Name=\"field_mesh\" GridType=\"Uniform\">"
-        )?;
-        writeln!(dest, "        <Topology Name=\"field_topo\" TopologyType=\"3DCoRectMesh\" NumberOfElements=\"{z} {y} {x}\" />",
-            x = first_field.dim().2 + 1,
-            y = first_field.dim().1 + 1,
-            z = first_field.dim().0 + 1)?;
-        writeln!(
-            dest,
-            "        <Geometry Name=\"field_geo\" Type=\"ORIGIN_DXDYDZ\">"
-        )?;
 
-        let box_size = first_field.field_box_mm.size();
+        // List of all fields to dump
+        let mut all_fields: Vec<_> = self.param_fields.iter().collect();
 
-        let x_scale = box_size.x / first_field.dim().2 as f64;
-        let y_scale = box_size.y / first_field.dim().1 as f64;
-        let z_scale = box_size.z / first_field.dim().0 as f64;
+        // Sort them by element count
+        all_fields.sort_by_key(|(_key, field)| {
+            let d = field.dim();
+            d.0 * d.1 * d.2
+        });
 
-        // TODO: Write this in HDF
-        writeln!(dest, "          <DataItem Format=\"XML\" Dimensions=\"3\">")?;
-        writeln!(
-            dest,
-            "            {z} {y} {x}",
-            x = x_offset + box_size.x / -2.0,
-            y = y_offset + box_size.y / -2.0,
-            z = z_offset + box_size.z / -2.0,
-        )?;
-        writeln!(dest, "          </DataItem>")?;
-        // TODO: Write this in HDF
-        writeln!(dest, "          <DataItem Format=\"XML\" Dimensions=\"3\">")?;
-        writeln!(
-            dest,
-            "            {z} {y} {x}",
-            x = x_scale,
-            y = y_scale,
-            z = z_scale,
-        )?;
-        writeln!(dest, "          </DataItem>")?;
-        writeln!(dest, "        </Geometry>")?;
+        // Group them by dimentions
+        for (idx, (_elements, fields)) in all_fields
+            .iter()
+            .group_by(|(_key, field)| {
+                let d = field.dim();
+                (d.0, d.1, d.2)
+            })
+            .into_iter()
+            .enumerate()
+        {
+            let fields: Vec<_> = fields.collect();
 
-        // Write fields
-        for (name, field) in &self.param_fields {
-            let path = format!("/fields/{}", name);
-            if let Some((data_type, precision, components)) = field.xdmf_type() {
-                // Since we assume all fields have the same bounding box, check that it's actually the
-                // case
-                if !field.has_same_box(first_field) {
-                    warn!("field {} doesn't have the same bounding box as the first field, this may lead to inconsistencies", name);
-                }
+            // Assume all fields share the same grid
+            let first_field = fields.iter().next().unwrap().1;
 
-                {
-                    let path = format!("{}/data", path);
-                    let dim: (usize, usize, usize, usize) = field.dim().into();
+            writeln!(
+                dest,
+                "      <Grid Name=\"field_mesh{idx}\" GridType=\"Uniform\">",
+                idx = idx,
+            )?;
+            writeln!(dest, "        <Topology Name=\"field_topo{idx}\" TopologyType=\"3DCoRectMesh\" NumberOfElements=\"{z} {y} {x}\" />",
+                x = first_field.dim().2 + 1,
+                y = first_field.dim().1 + 1,
+                z = first_field.dim().0 + 1,
+                idx = idx,
+            )?;
+            writeln!(
+                dest,
+                "        <Geometry Name=\"field_geo{idx}\" Type=\"ORIGIN_DXDYDZ\">",
+                idx = idx,
+            )?;
 
-                    // Export all fields to XDMF
-                    writeln!(
-                        dest,
-                        "        <Attribute Name=\"{name}\" AttributeType=\"{attribute_type}\" Center=\"Cell\">",
-                        name = name,
-                        attribute_type = if components == 1 {
-                            "Scalar"
-                        } else {
-                            "Vector"
-                        }
-                    )?;
-                    writeln!(dest, "          <DataItem Dimensions=\"{z} {y} {x}{d}\" Format=\"HDF5\" DataType=\"{data_type}\" Precision=\"{precision}\">",
-                        x = dim.2,
-                        y = dim.1,
-                        z = dim.0,
-                        data_type = data_type,
-                        precision = precision,
-                        d = if components == 1 {
-                            "".to_owned()
-                        } else {
-                            format!(" {}", components)
-                        },
-                    )?;
-                    writeln!(dest, "            {}:{}", h5_file_name, path)?;
-                    writeln!(dest, "          </DataItem>")?;
-                    writeln!(dest, "        </Attribute>")?;
+            let box_size = first_field.field_box_mm.size();
+
+            let x_scale = box_size.x / first_field.dim().2 as f32;
+            let y_scale = box_size.y / first_field.dim().1 as f32;
+            let z_scale = box_size.z / first_field.dim().0 as f32;
+
+            // TODO: Write this in HDF
+            writeln!(dest, "          <DataItem Format=\"XML\" Dimensions=\"3\">")?;
+            writeln!(
+                dest,
+                "            {z} {y} {x}",
+                x = offsets[0] + box_size.x / -2.0,
+                y = offsets[1] + box_size.y / -2.0,
+                z = offsets[2] + box_size.z / -2.0,
+            )?;
+            writeln!(dest, "          </DataItem>")?;
+            // TODO: Write this in HDF
+            writeln!(dest, "          <DataItem Format=\"XML\" Dimensions=\"3\">")?;
+            writeln!(
+                dest,
+                "            {z} {y} {x}",
+                x = x_scale,
+                y = y_scale,
+                z = z_scale,
+            )?;
+            writeln!(dest, "          </DataItem>")?;
+            writeln!(dest, "        </Geometry>")?;
+
+            // Write fields
+            for (name, field) in fields {
+                let path = format!("/fields/{}", name);
+                if let Some((data_type, precision, components)) = field.xdmf_type() {
+                    // Since we assume all fields have the same bounding box, check that it's actually the
+                    // case
+                    if !field.has_same_box(first_field) {
+                        warn!("field {} doesn't have the same bounding box as the first field, this may lead to inconsistencies", name);
+                    }
+
+                    {
+                        let path = format!("{}/data", path);
+                        let dim: (usize, usize, usize, usize) = field.dim().into();
+
+                        // Export all fields to XDMF
+                        writeln!(
+                            dest,
+                            "        <Attribute Name=\"{name}\" AttributeType=\"{attribute_type}\" Center=\"Cell\">",
+                            name = name,
+                            attribute_type = if components == 1 {
+                                "Scalar"
+                            } else {
+                                "Vector"
+                            }
+                        )?;
+                        writeln!(dest, "          <DataItem Dimensions=\"{z} {y} {x}{d}\" Format=\"HDF5\" DataType=\"{data_type}\" Precision=\"{precision}\">",
+                            x = dim.2,
+                            y = dim.1,
+                            z = dim.0,
+                            data_type = data_type,
+                            precision = precision,
+                            d = if components == 1 {
+                                "".to_owned()
+                            } else {
+                                format!(" {}", components)
+                            },
+                        )?;
+                        writeln!(dest, "            {}:{}", h5_file_name, path)?;
+                        writeln!(dest, "          </DataItem>")?;
+                        writeln!(dest, "        </Attribute>")?;
+                    }
                 }
             }
+
+            writeln!(dest, "      </Grid>")?;
         }
 
-        writeln!(dest, "      </Grid>")?;
+        // Size of the smallest field
+        let box_size = all_fields[0].1.field_box_mm.size();
 
         // Write array params
         let mut arrays: Vec<_> = self.param_arrays.iter().collect();
@@ -394,7 +421,7 @@ impl ParamBag {
                 if scale.is_none() {
                     let array_x_scale = box_size.x / 1.0;
                     let array_y_scale = box_size.y / 1.0;
-                    let array_z_scale = box_size.z / len as f64;
+                    let array_z_scale = box_size.z / len as f32;
 
                     writeln!(
                         dest,
@@ -418,9 +445,9 @@ impl ParamBag {
                     writeln!(
                         dest,
                         "            {z} {y} {x}",
-                        x = x_offset + box_size.x / -2.0,
-                        y = y_offset + box_size.y / -2.0,
-                        z = z_offset + box_size.z / -2.0,
+                        x = offsets[0] + box_size.x / -2.0,
+                        y = offsets[1] + box_size.y / -2.0,
+                        z = offsets[2] + box_size.z / -2.0,
                     )?;
                     writeln!(dest, "          </DataItem>")?;
                     // TODO: Write this in HDF

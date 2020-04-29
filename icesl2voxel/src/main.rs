@@ -60,6 +60,10 @@ struct Opts {
     /// List of fields to assemble as spherical vector fields
     #[structopt(long)]
     assemble_spherical: Vec<DirectionField>,
+
+    /// Gcode to extract extruded segments from
+    #[structopt(short, long)]
+    gcode: Option<PathBuf>,
 }
 
 impl Opts {
@@ -86,6 +90,7 @@ mod param_bag;
 mod param_field;
 mod parse;
 mod utils;
+mod voxelizer;
 
 use param_bag::ParamBag;
 
@@ -96,13 +101,13 @@ fn write_hdf5(output: &Path, param_bag: &ParamBag) -> Result<(), failure::Error>
 }
 
 fn write_xdmf(
-    (x_offset, y_offset, z_offset): (f64, f64, f64),
+    offsets: nalgebra::Vector3<f32>,
     param_bag: &ParamBag,
     h5_file_name: &str,
     dest: &Path,
 ) -> Result<(), failure::Error> {
     let mut meta = File::create(dest)?;
-    Ok(param_bag.write_xdmf((x_offset, y_offset, z_offset), h5_file_name, &mut meta)?)
+    Ok(param_bag.write_xdmf(offsets, h5_file_name, &mut meta)?)
 }
 
 #[paw::main]
@@ -144,9 +149,23 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
         }
     }
 
-    let h5_file_name = opts.output.file_name().unwrap().to_string_lossy();
+    let (geometry_bounding_box, offsets) = if let Some(mesh_path) = &opts.mesh {
+        let bbox = geometry::get_bounding_box(mesh_path)?;
+        let offsets = bbox.center();
+        debug!("loaded bounding box for geometry: {:?}", bbox);
 
-    let offsets = geometry::read_offsets(&opts.mesh)?;
+        (Some(bbox), offsets)
+    } else {
+        (None, nalgebra::Vector3::new(0.0, 0.0, 0.0))
+    };
+
+    // Voxelize printed geometry
+    if let Some(gcode_path) = &opts.gcode {
+        let voxelized_field = voxelizer::voxelize(gcode_path, geometry_bounding_box)?;
+        param_bag.add_field("infill_geometry", voxelized_field);
+    }
+
+    let h5_file_name = opts.output.file_name().unwrap().to_string_lossy();
 
     // Write XDMF
     write_xdmf(
