@@ -6,6 +6,7 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use ndarray::par_azip;
 use ndarray::prelude::*;
+use rand::{Rng, SeedableRng};
 use regex::Regex;
 
 use super::param_field::ParamField;
@@ -38,6 +39,7 @@ lazy_static! {
 pub fn voxelize(
     path: &Path,
     geometry_bounding_box: Option<BoundingBox<f32>>,
+    samples: usize,
 ) -> Result<ParamField, failure::Error> {
     // Parse gcode
     let gcode_src = std::fs::read_to_string(path)?;
@@ -155,10 +157,11 @@ pub fn voxelize(
         }
     }
 
+    // Skip the first layer because of the supports, but extend it after
     let printer_bbox = BoundingBox::from(
         &mut segments
             .iter()
-            .filter(|seg| seg.state.layer.is_some())
+            .filter(|seg| seg.state.layer.map(|l| l > 0).unwrap_or(false))
             .map(|seg| (&seg.start, &seg.end))
             .into_iter(),
     );
@@ -170,7 +173,7 @@ pub fn voxelize(
     let printer_bbox = BoundingBox {
         min_x: printer_bbox.min_x - global_state.nozzle_diameter / 2.0,
         min_y: printer_bbox.min_y - global_state.nozzle_diameter / 2.0,
-        min_z: printer_bbox.min_z - global_state.nozzle_diameter / 2.0,
+        min_z: printer_bbox.min_z - 2.0 * global_state.nozzle_diameter / 2.0,
         max_x: printer_bbox.max_x + global_state.nozzle_diameter / 2.0,
         max_y: printer_bbox.max_y + global_state.nozzle_diameter / 2.0,
         max_z: printer_bbox.max_z + global_state.nozzle_diameter / 2.0,
@@ -207,7 +210,12 @@ pub fn voxelize(
     // Allocate voxel grid
     let mut vx = ndarray::Array3::<u8>::zeros((zc, yc, xc));
 
-    par_azip!((mut vx_layer in vx.outer_iter_mut(), layer_segs in &segarray) {
+    let nozzle_dimensions = nalgebra::Vector2::new(
+        global_state.nozzle_diameter / bbox_size[0] * xc as f32 / 2.0,
+        global_state.nozzle_diameter / bbox_size[1] * yc as f32 / 2.0,
+    );
+
+    par_azip!((index k, mut vx_layer in vx.outer_iter_mut(), layer_segs in &segarray) {
         for seg in layer_segs {
             // We only process horizontal segments in the current layer
             assert!(seg.start[2] == seg.end[2]);
@@ -216,11 +224,85 @@ pub fn voxelize(
             let start = (seg.start - bbox_min).component_div(&bbox_size).component_mul(&c);
             let end = (seg.end - bbox_min).component_div(&bbox_size).component_mul(&c);
 
-            for ((x, y), value) in line_drawing::XiaolinWu::<f32, i32>::new((start[0], start[1]), (end[0], end[1])) {
-                if let Some(c) = vx_layer.get_mut((y as usize, x as usize)) {
-                    *c = c.saturating_add((value * 255.0) as u8);
-                } else {
-                    error!("out of bounds: ({}, {}) for segment ({}) -> ({})", x, y, start, end);
+            let d = end - start;
+            let d = nalgebra::Vector2::new(d[0], d[1]);
+
+            let normal_vec = if d[1].abs() > d[0].abs() {
+                nalgebra::Vector2::new(-d[1], d[0]).normalize()
+            } else {
+                nalgebra::Vector2::new(d[1], -d[0]).normalize()
+            };
+
+            let start = nalgebra::Vector2::new(start[0], start[1]);
+            let end = nalgebra::Vector2::new(end[0], end[1]);
+
+            let j_min = (if start[1] < end[1] {
+                start[1] - nozzle_dimensions[1]
+            } else {
+                end[1] - nozzle_dimensions[1]
+            }.floor() as isize).max(0).min((yc - 1) as isize) as usize;
+
+            let j_max = (if start[1] < end[1] {
+                end[1] + nozzle_dimensions[1]
+            } else {
+                start[1] + nozzle_dimensions[1]
+            }.ceil() as isize).max(0).min((yc - 1) as isize) as usize;
+
+            let i_min = (if start[0] < end[0] {
+                start[0] - nozzle_dimensions[0]
+            } else {
+                end[0] - nozzle_dimensions[0]
+            }.floor() as isize).max(0).min((xc - 1) as isize) as usize;
+
+            let i_max = (if start[0] < end[0] {
+                end[0] + nozzle_dimensions[0]
+            } else {
+                start[0] + nozzle_dimensions[0]
+            }.ceil() as isize).max(0).min((xc - 1) as isize) as usize;
+
+            for j in j_min..=j_max {
+                for i in i_min..=i_max {
+                    let v = vx_layer.get_mut((j, i)).ok_or_else(|| failure::err_msg(format!("out of bounds: ({}, {})", i, j))).unwrap();
+
+                    let x = i as f32 + 0.5;
+                    let y = j as f32 + 0.5;
+
+                    let mut in_samples = 0;
+                    let mut rnd = rand::rngs::SmallRng::seed_from_u64((k * yc * xc + j * xc + i) as u64);
+
+                    for l in 0..samples {
+                        let (x, y) = if l == 0 {
+                            (x, y) // middle for first sample
+                        } else {
+                            (
+                                x + rnd.gen_range(-0.5, 0.5),
+                                y + rnd.gen_range(-0.5, 0.5),
+                            )
+                        };
+
+                        // Sample location
+                        let p = nalgebra::Vector2::new(x, y);
+
+                        // Compute projection of sample onto segment
+                        let s = (p - start).dot(&d) / d.dot(&d);
+                        let proj = start + s * (end - start);
+
+                        let is_in = if s > 1.0 {
+                            // Outside end of segment
+                            (p - end).component_div(&nozzle_dimensions).norm() < 1.0
+                        } else if s < 0.0 {
+                            // Outside start of segment
+                            (p - start).component_div(&nozzle_dimensions).norm() < 1.0
+                        } else {
+                            ((p - proj).dot(&normal_vec) * normal_vec).component_div(&nozzle_dimensions).norm() < 1.0
+                        };
+
+                        if is_in {
+                            in_samples += 1;
+                        }
+                    }
+
+                    *v = v.saturating_add(((in_samples as f32 / samples as f32) * 255.0) as u8);
                 }
             }
         }

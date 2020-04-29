@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use structopt::StructOpt;
 
@@ -64,6 +65,10 @@ struct Opts {
     /// Gcode to extract extruded segments from
     #[structopt(short, long)]
     gcode: Option<PathBuf>,
+
+    /// Number of samples for voxelizing geometry
+    #[structopt(long, default_value = "4")]
+    samples: std::num::NonZeroUsize,
 }
 
 impl Opts {
@@ -116,30 +121,46 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
         .format_timestamp(None)
         .init();
 
-    let file = File::open(&opts.input)?;
-    let mut file = BufReader::new(file);
+    let mut param_bag = {
+        let start = Instant::now();
 
-    let mut param_bag = ParamBag::parse(&mut file)?;
+        let file = File::open(&opts.input)?;
+        let mut file = BufReader::new(file);
+        let bag = ParamBag::parse(&mut file)?;
+
+        debug!("loaded parameters in {:.2}ms", start.elapsed().as_millis());
+
+        bag
+    };
 
     for force_field in &opts.get_force_field() {
         if param_bag.is_field(force_field) {
             // Nothing to do
         } else {
+            let start = Instant::now();
+
             match param_bag.convert_to_field(force_field) {
-                Ok(_) => info!("converted {} to a field", force_field),
+                Ok(_) => info!(
+                    "converted {} to a field in {:.2}ms",
+                    force_field,
+                    start.elapsed().as_millis()
+                ),
                 Err(error) => error!("could not convert {} to a field: {}", force_field, error),
             }
         }
     }
 
     for assemble_spherical in &opts.assemble_spherical {
+        let start = Instant::now();
+
         match param_bag.assemble_spherical(
             &assemble_spherical.output_name,
             &assemble_spherical.coords[..],
         ) {
             Ok(_) => info!(
-                "assembled {} as spherical vector field",
-                assemble_spherical.output_name
+                "assembled {} as spherical vector field in {:.2}ms",
+                assemble_spherical.output_name,
+                start.elapsed().as_millis(),
             ),
             Err(error) => error!(
                 "could not assemble {}: {}",
@@ -149,9 +170,16 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
     }
 
     let (geometry_bounding_box, offsets) = if let Some(mesh_path) = &opts.mesh {
+        let start = Instant::now();
+
         let bbox = geometry::get_bounding_box(mesh_path)?;
         let offsets = bbox.center();
-        debug!("loaded bounding box for geometry: {:?}", bbox);
+
+        debug!(
+            "loaded bounding box for geometry in {:.2}ms: {:?}",
+            start.elapsed().as_millis(),
+            bbox
+        );
 
         (Some(bbox), offsets)
     } else {
@@ -160,8 +188,16 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
 
     // Voxelize printed geometry
     if let Some(gcode_path) = &opts.gcode {
-        let voxelized_field = voxelizer::voxelize(gcode_path, geometry_bounding_box)?;
+        let start = Instant::now();
+
+        let voxelized_field =
+            voxelizer::voxelize(gcode_path, geometry_bounding_box, opts.samples.into())?;
         param_bag.add_field("infill_geometry", voxelized_field);
+
+        debug!(
+            "voxelized printed geometry in {:.2}ms",
+            start.elapsed().as_millis()
+        );
     }
 
     let h5_file_name = opts.output.file_name().unwrap().to_string_lossy();

@@ -61,6 +61,11 @@ impl FieldStorage {
             }
             Self::ByteVec4(array) => {
                 let field = array.index_axis(Axis(3), 0);
+                if std_layout.shape() != field.shape() {
+                    let d = array.dim();
+                    *std_layout = ndarray::Array3::zeros((d.0, d.1, d.2));
+                }
+
                 std_layout.assign(&field);
 
                 let dim: (usize, usize, usize) = std_layout.dim().into();
