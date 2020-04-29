@@ -176,6 +176,8 @@ pub fn voxelize(
         max_z: printer_bbox.max_z + global_state.nozzle_diameter / 2.0,
     };
 
+    let bbox_min =
+        nalgebra::Vector3::new(printer_bbox.min_x, printer_bbox.min_y, printer_bbox.min_z);
     let bbox_size = printer_bbox.size();
 
     debug!(
@@ -184,15 +186,13 @@ pub fn voxelize(
         current_layer
     );
     debug!("printing bounding box: {:?}", printer_bbox);
-    debug!(
-        "memory usage: {}",
-        bytesize::ByteSize::b((std::mem::size_of::<Segment>() * segments.len()) as u64)
-    );
 
     // One cell per layer
     let zc = current_layer;
     let xc = zc;
     let yc = zc;
+
+    let c = nalgebra::Vector3::new(xc as f32, yc as f32, zc as f32);
 
     // Turn segment list into list of per-layer segments
     let mut segarray: ndarray::Array1<Vec<&Segment>> = ndarray::Array1::default((zc,));
@@ -213,16 +213,14 @@ pub fn voxelize(
             assert!(seg.start[2] == seg.end[2]);
 
             // Convert end and start point into voxel coordinates
-            let start_x = ((seg.start[0].min(seg.end[0]) - printer_bbox.min_x) / bbox_size.x) * (xc - 1) as f32 + 0.5;
-            let start_y = ((seg.start[1].min(seg.end[1]) - printer_bbox.min_y) / bbox_size.y) * (yc - 1) as f32 + 0.5;
-            let end_x = ((seg.end[0].max(seg.start[0]) - printer_bbox.min_x) / bbox_size.x) * (xc - 1) as f32 + 0.5;
-            let end_y = ((seg.end[1].max(seg.start[1]) - printer_bbox.min_y) / bbox_size.y) * (yc - 1) as f32 + 0.5;
+            let start = (seg.start - bbox_min).component_div(&bbox_size).component_mul(&c);
+            let end = (seg.end - bbox_min).component_div(&bbox_size).component_mul(&c);
 
-            for ((x, y), value) in line_drawing::XiaolinWu::<f32, i32>::new((start_x, start_y), (end_x, end_y)) {
+            for ((x, y), value) in line_drawing::XiaolinWu::<f32, i32>::new((start[0], start[1]), (end[0], end[1])) {
                 if let Some(c) = vx_layer.get_mut((y as usize, x as usize)) {
                     *c = c.saturating_add((value * 255.0) as u8);
                 } else {
-                    error!("out of bounds: ({}, {}) for segment ({}, {}) -> ({}, {})", x, y, start_x, start_y, end_x, end_y);
+                    error!("out of bounds: ({}, {}) for segment ({}) -> ({})", x, y, start, end);
                 }
             }
         }
