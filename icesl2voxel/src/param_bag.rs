@@ -276,13 +276,11 @@ impl ParamBag {
 
     pub fn write_xdmf(
         &self,
-        offsets: [f32; 3],
+        offsets: nalgebra::Vector3<f32>,
         h5_file_name: &str,
         dest: &mut dyn std::io::Write,
         export_arrays: bool,
     ) -> std::io::Result<()> {
-        let offsets = nalgebra::Vector3::from(offsets);
-
         writeln!(dest, "<?xml version=\"1.0\" encoding=\"utf-8\" ?>")?;
         writeln!(dest, "<!DOCTYPE Xdmf SYSTEM \"Xdmf.dtd\" []>")?;
         writeln!(dest, "<Xdmf Version=\"2.0\">")?;
@@ -331,7 +329,7 @@ impl ParamBag {
                 idx = idx,
             )?;
 
-            let box_size = nalgebra::Vector3::from(first_field.field_box_mm.size());
+            let box_size = first_field.field_box_mm.size();
 
             let x_scale = box_size.x / first_field.dim().2 as f32;
             let y_scale = box_size.y / first_field.dim().1 as f32;
@@ -407,7 +405,7 @@ impl ParamBag {
         }
 
         // Size of the smallest field
-        let box_size = nalgebra::Vector3::from(all_fields[0].1.field_box_mm.size());
+        let box_size = all_fields[0].1.field_box_mm.size();
 
         if export_arrays {
             // Write array params

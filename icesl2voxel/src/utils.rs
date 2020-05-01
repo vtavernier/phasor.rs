@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -13,28 +11,28 @@ pub struct BoundingBox<T> {
 }
 
 impl<T: num_traits::Num + num_traits::NumCast + std::fmt::Debug + Copy + 'static> BoundingBox<T> {
-    pub fn size(&self) -> [T; 3] {
-        [
+    pub fn size(&self) -> nalgebra::Vector3<T> {
+        nalgebra::Vector3::new(
             self.max_x - self.min_x,
             self.max_y - self.min_y,
             self.max_z - self.min_z,
-        ]
+        )
     }
 
-    pub fn center(&self) -> [T; 3] {
-        [
+    pub fn center(&self) -> nalgebra::Vector3<T> {
+        nalgebra::Vector3::new(
             (self.max_x + self.min_x) / num_traits::NumCast::from(2.0).unwrap(),
             (self.max_y + self.min_y) / num_traits::NumCast::from(2.0).unwrap(),
             (self.max_z + self.min_z) / num_traits::NumCast::from(2.0).unwrap(),
-        ]
+        )
     }
 
-    pub fn min(&self) -> [T; 3] {
-        [self.min_x, self.min_y, self.min_z]
+    pub fn min(&self) -> nalgebra::Vector3<T> {
+        nalgebra::Vector3::new(self.min_x, self.min_y, self.min_z)
     }
 
-    pub fn max(&self) -> [T; 3] {
-        [self.max_x, self.max_y, self.max_z]
+    pub fn max(&self) -> nalgebra::Vector3<T> {
+        nalgebra::Vector3::new(self.max_x, self.max_y, self.max_z)
     }
 }
 

@@ -173,8 +173,8 @@ pub fn voxelize_gcode(path: &Path, samples: usize) -> Result<ParamField, failure
         max_z: printer_bbox.max_z + global_state.nozzle_diameter / 2.0,
     };
 
-    let bbox_min = nalgebra::Vector3::from(printer_bbox.min());
-    let bbox_size = nalgebra::Vector3::from(printer_bbox.size());
+    let bbox_min = printer_bbox.min();
+    let bbox_size = printer_bbox.size();
 
     debug!(
         "extracted {} line segments from gcode over {} layers",
@@ -308,7 +308,7 @@ fn render_axis(
     mesh_bbox: &BoundingBox<f32>,
     image_width: usize,
     image_height: usize,
-    transform: cgmath::Matrix4<f32>,
+    transform: nalgebra::Matrix4<f32>,
     prog: &shaders::MeshProgram,
     gl: &tinygl::Context,
     mesh: &stl_io::IndexedMesh,
@@ -346,8 +346,8 @@ fn render_axis(
         );
     }
 
-    let v1 = cgmath::vec4(mesh_bbox.min_x, mesh_bbox.min_y, mesh_bbox.min_z, 1.0);
-    let v2 = cgmath::vec4(mesh_bbox.max_x, mesh_bbox.max_y, mesh_bbox.max_z, 1.0);
+    let v1 = nalgebra::Point::from(mesh_bbox.min()).to_homogeneous();
+    let v2 = nalgebra::Point::from(mesh_bbox.max()).to_homogeneous();
 
     debug!("original viewport: ({:?}; {:?})", v1, v2);
 
@@ -362,7 +362,7 @@ fn render_axis(
     prog.set_view_matrix(
         &gl,
         false,
-        cgmath::ortho(
+        nalgebra::Matrix4::new_orthographic(
             v1.x - OFFSET,
             v2.x + OFFSET,
             v1.y - OFFSET,
@@ -481,8 +481,6 @@ pub fn voxelize_mesh(
     printed_field: &ParamField,
     export_depth_images: bool,
 ) -> Result<ParamField, failure::Error> {
-    use cgmath::*;
-
     let el = EventLoop::new();
     let sz = glutin::dpi::PhysicalSize::new(128, 128);
     let headless_context = ContextBuilder::new()
@@ -588,8 +586,8 @@ pub fn voxelize_mesh(
 
     let printed_dim = printed_field.dim();
 
-    let center = Vector3::from(mesh_bbox.center());
-    let size = Vector3::from(mesh_bbox.size());
+    let center = mesh_bbox.center();
+    let size = mesh_bbox.size();
 
     debug!("input geometry center: {:?}", center);
     debug!("input geometry size: {:?}", size);
@@ -598,7 +596,7 @@ pub fn voxelize_mesh(
     let (zplus, zminus) = {
         debug!("rendering Z axis depth");
 
-        let trans = Matrix4::identity();
+        let trans = nalgebra::Matrix4::identity();
 
         render_axis(
             mesh_bbox,
@@ -616,18 +614,20 @@ pub fn voxelize_mesh(
         write_depth_img(&zminus, "zminus.png")?;
     }
 
-    let get_tran = |rot: Basis3<f32>| {
-        Matrix4::from_translation(center)
-            * Matrix4::from(Matrix3::from(rot))
-            * Matrix4::from_translation(-center)
+    let get_tran = |rot: nalgebra::Matrix4<f32>| {
+        nalgebra::Matrix4::new_translation(&center)
+            * rot
+            * nalgebra::Matrix4::new_translation(&-center)
     };
 
     // Render Y axis
     let (yplus, yminus) = {
         debug!("rendering Y axis depth");
 
-        let rot: Basis3<_> = Rotation3::from_angle_x(Rad(std::f32::consts::FRAC_PI_2));
-        let trans = get_tran(rot);
+        let trans = get_tran(nalgebra::Matrix4::from_axis_angle(
+            &nalgebra::Vector3::x_axis(),
+            std::f32::consts::FRAC_PI_2,
+        ));
 
         render_axis(
             mesh_bbox,
@@ -649,8 +649,10 @@ pub fn voxelize_mesh(
     let (xplus, xminus) = {
         debug!("rendering X axis depth");
 
-        let rot: Basis3<_> = Rotation3::from_angle_y(Rad(-std::f32::consts::FRAC_PI_2));
-        let trans = get_tran(rot);
+        let trans = get_tran(nalgebra::Matrix4::from_axis_angle(
+            &nalgebra::Vector3::y_axis(),
+            -std::f32::consts::FRAC_PI_2,
+        ));
 
         render_axis(
             mesh_bbox,

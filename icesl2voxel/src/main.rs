@@ -114,10 +114,10 @@ fn write_hdf5(output: &Path, param_bag: &ParamBag) -> Result<(), failure::Error>
 }
 
 fn write_xdmf(
-    offsets: [f32; 3],
+    offsets: nalgebra::Vector3<f32>,
     param_bag: &ParamBag,
     h5_file_name: &str,
-    opts: &Opts
+    opts: &Opts,
 ) -> Result<(), failure::Error> {
     let mut meta = File::create(opts.output.with_extension("xdmf"))?;
     Ok(param_bag.write_xdmf(offsets, h5_file_name, &mut meta, opts.xdmf_export_arrays)?)
@@ -192,7 +192,7 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
 
         (Some(bbox), offsets, Some(mesh))
     } else {
-        (None, [0.0, 0.0, 0.0], None)
+        (None, nalgebra::Vector3::zeros(), None)
     };
 
     // Voxelize printed geometry
@@ -230,12 +230,7 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
     let h5_file_name = opts.output.file_name().unwrap().to_string_lossy();
 
     // Write XDMF
-    write_xdmf(
-        offsets,
-        &param_bag,
-        &h5_file_name,
-        &opts
-    )?;
+    write_xdmf(offsets, &param_bag, &h5_file_name, &opts)?;
 
     // Write HDF5
     write_hdf5(&opts.output, &param_bag)?;
