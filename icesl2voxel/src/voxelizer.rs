@@ -684,15 +684,26 @@ pub fn voxelize_mesh(
         let x_min = xplus[(j, xw - 1 - k)] * printed_dim.2 as f32;
         let x_max = xminus[(j, xw - 1 - k)] * printed_dim.2 as f32;
 
-        let k = (printed_dim.0 - 1 - k) as f32;
-        let j = (printed_dim.1 - 1 - j) as f32;
-        let i = (printed_dim.2 - 1 - i) as f32;
+        let k = (printed_dim.0 - 1 - k) as f32 + 0.5;
+        let j = (printed_dim.1 - 1 - j) as f32 + 0.5;
+        let i = (printed_dim.2 - 1 - i) as f32 + 0.5;
 
-        if z_min <= k && k <= z_max &&
-           y_min <= j && j <= y_max &&
-           x_min <= i && i <= x_max {
-            *v = 255;
+        fn axis_val(pos: f32, min: f32, max: f32) -> f32 {
+            if pos >= min.ceil() && pos <= max.floor() {
+                1.0
+            } else if pos < min.floor() || pos > max.ceil() {
+                0.0
+            } else if pos < min.ceil() {
+                (min.ceil() - pos).fract()
+            } else {
+                (pos - max.floor()).fract()
+            }
         }
+
+        *v = ((axis_val(k, z_min, z_max)
+                * axis_val(j, y_min, y_max)
+                * axis_val(i, x_min, x_max))
+            * 255.0) as u8;
     });
 
     Ok(ParamField::new_u8(printed_field.field_box_mm, vis))
