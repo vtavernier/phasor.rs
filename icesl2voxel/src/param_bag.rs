@@ -50,7 +50,7 @@ impl ParamBag {
                             .unwrap()
                             .as_str();
 
-                        debug!("adding field {}", name);
+                        trace!("adding field {}", name);
                         field_names.insert(name.to_owned());
                         param_bag.add_parsed_field(&name, &attributes[..])?;
                     } else if let Some(attribute) = attributes
@@ -64,12 +64,12 @@ impl ParamBag {
                             }
 
                             if captures.get(2).unwrap().as_str() == "0" {
-                                debug!("adding array {}", &captures.get(1).unwrap().as_str());
+                                trace!("adding array {}", &captures.get(1).unwrap().as_str());
                             }
 
                             param_bag.add_array_item(&captures, &attribute.value)?;
                         } else {
-                            debug!("adding parameter {}", name.local_name);
+                            trace!("adding parameter {}", name.local_name);
                             param_bag.add_item(&name.local_name, &attribute.value)?;
                         }
                     } else {
@@ -79,9 +79,7 @@ impl ParamBag {
                 Ok(XmlEvent::EndElement { .. }) => {
                     // We don't care about EndElement
                 }
-                other => {
-                    trace!("parser event: {:?}", other);
-                }
+                _ => {}
             }
         }
 
