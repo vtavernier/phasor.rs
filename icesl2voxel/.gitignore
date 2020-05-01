@@ -6,3 +6,4 @@
 *.stl
 *.xml
 target/
+*.png

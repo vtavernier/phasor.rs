@@ -69,6 +69,10 @@ struct Opts {
     /// Number of samples for voxelizing geometry
     #[structopt(long, default_value = "4")]
     samples: std::num::NonZeroUsize,
+
+    /// Export depth images for input geometry voxelizing
+    #[structopt(long)]
+    export_depth_images: bool,
 }
 
 impl Opts {
@@ -106,7 +110,7 @@ fn write_hdf5(output: &Path, param_bag: &ParamBag) -> Result<(), failure::Error>
 }
 
 fn write_xdmf(
-    offsets: nalgebra::Vector3<f32>,
+    offsets: [f32; 3],
     param_bag: &ParamBag,
     h5_file_name: &str,
     dest: &Path,
@@ -169,10 +173,11 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
         }
     }
 
-    let (geometry_bounding_box, offsets) = if let Some(mesh_path) = &opts.mesh {
+    let (geometry_bounding_box, offsets, mesh) = if let Some(mesh_path) = &opts.mesh {
         let start = Instant::now();
 
-        let bbox = geometry::get_bounding_box(mesh_path)?;
+        let mesh = geometry::load_mesh(mesh_path)?;
+        let bbox = geometry::get_bounding_box(&mesh);
         let offsets = bbox.center();
 
         debug!(
@@ -181,23 +186,41 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
             bbox
         );
 
-        (Some(bbox), offsets)
+        (Some(bbox), offsets, Some(mesh))
     } else {
-        (None, nalgebra::Vector3::new(0.0, 0.0, 0.0))
+        (None, [0.0, 0.0, 0.0], None)
     };
 
     // Voxelize printed geometry
     if let Some(gcode_path) = &opts.gcode {
         let start = Instant::now();
 
-        let voxelized_field =
-            voxelizer::voxelize(gcode_path, geometry_bounding_box, opts.samples.into())?;
-        param_bag.add_field("infill_geometry", voxelized_field);
+        let voxelized_field = voxelizer::voxelize_gcode(gcode_path, opts.samples.into())?;
 
         debug!(
             "voxelized printed geometry in {:.2}ms",
             start.elapsed().as_millis()
         );
+
+        if let Some(mesh) = &mesh {
+            let start = Instant::now();
+
+            let voxelized_mesh = voxelizer::voxelize_mesh(
+                mesh,
+                geometry_bounding_box.as_ref().unwrap(),
+                &voxelized_field,
+                opts.export_depth_images,
+            )?;
+
+            debug!(
+                "voxelized input geometry in {:.2}ms",
+                start.elapsed().as_millis()
+            );
+
+            param_bag.add_field("input_geometry", voxelized_mesh);
+        }
+
+        param_bag.add_field("infill_geometry", voxelized_field);
     }
 
     let h5_file_name = opts.output.file_name().unwrap().to_string_lossy();

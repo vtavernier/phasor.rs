@@ -28,6 +28,12 @@ line_drawing = "0.8"
 num-traits = "0.2"
 nalgebra = "0.21"
 rand = { version = "0.7", default-features = false, features = [ "small_rng" ] }
+tinygl = { git = "https://github.com/vtavernier/tinygl.git" }
+glutin = "0.24.0"
+image = "0.23.4"
+
+[build-dependencies]
+tinygl-compiler = { git = "https://github.com/vtavernier/tinygl.git" }
 
 [profile.release]
 debug = true

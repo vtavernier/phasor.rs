@@ -278,10 +278,12 @@ impl ParamBag {
 
     pub fn write_xdmf(
         &self,
-        offsets: nalgebra::Vector3<f32>,
+        offsets: [f32; 3],
         h5_file_name: &str,
         dest: &mut dyn std::io::Write,
     ) -> std::io::Result<()> {
+        let offsets = nalgebra::Vector3::from(offsets);
+
         writeln!(dest, "<?xml version=\"1.0\" encoding=\"utf-8\" ?>")?;
         writeln!(dest, "<!DOCTYPE Xdmf SYSTEM \"Xdmf.dtd\" []>")?;
         writeln!(dest, "<Xdmf Version=\"2.0\">")?;
@@ -330,7 +332,7 @@ impl ParamBag {
                 idx = idx,
             )?;
 
-            let box_size = first_field.field_box_mm.size();
+            let box_size = nalgebra::Vector3::from(first_field.field_box_mm.size());
 
             let x_scale = box_size.x / first_field.dim().2 as f32;
             let y_scale = box_size.y / first_field.dim().1 as f32;
@@ -341,9 +343,9 @@ impl ParamBag {
             writeln!(
                 dest,
                 "            {z} {y} {x}",
-                x = offsets[0] + box_size.x / -2.0,
-                y = offsets[1] + box_size.y / -2.0,
-                z = offsets[2] + box_size.z / -2.0,
+                x = offsets.x + box_size.x / -2.0,
+                y = offsets.y + box_size.y / -2.0,
+                z = offsets.z + box_size.z / -2.0,
             )?;
             writeln!(dest, "          </DataItem>")?;
             // TODO: Write this in HDF
@@ -406,7 +408,7 @@ impl ParamBag {
         }
 
         // Size of the smallest field
-        let box_size = all_fields[0].1.field_box_mm.size();
+        let box_size = nalgebra::Vector3::from(all_fields[0].1.field_box_mm.size());
 
         // Write array params
         let mut arrays: Vec<_> = self.param_arrays.iter().collect();
@@ -445,9 +447,9 @@ impl ParamBag {
                     writeln!(
                         dest,
                         "            {z} {y} {x}",
-                        x = offsets[0] + box_size.x / -2.0,
-                        y = offsets[1] + box_size.y / -2.0,
-                        z = offsets[2] + box_size.z / -2.0,
+                        x = offsets.x + box_size.x / -2.0,
+                        y = offsets.y + box_size.y / -2.0,
+                        z = offsets.z + box_size.z / -2.0,
                     )?;
                     writeln!(dest, "          </DataItem>")?;
                     // TODO: Write this in HDF

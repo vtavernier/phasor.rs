@@ -15,14 +15,6 @@ enum FieldStorage {
 }
 
 impl FieldStorage {
-    fn as_f32_slice_mut(&mut self) -> Option<&mut [f32]> {
-        match self {
-            Self::Float(array) => array.as_slice_mut(),
-            Self::Vec3(array) => array.as_slice_mut(),
-            _ => None,
-        }
-    }
-
     fn as_u8_slice_mut(&mut self) -> Option<&mut [u8]> {
         match self {
             Self::Byte(array) => array.as_slice_mut(),
