@@ -73,6 +73,10 @@ struct Opts {
     /// Export depth images for input geometry voxelizing
     #[structopt(long)]
     export_depth_images: bool,
+
+    /// Export arrays in XDMF
+    #[structopt(long)]
+    xdmf_export_arrays: bool,
 }
 
 impl Opts {
@@ -113,10 +117,10 @@ fn write_xdmf(
     offsets: [f32; 3],
     param_bag: &ParamBag,
     h5_file_name: &str,
-    dest: &Path,
+    opts: &Opts
 ) -> Result<(), failure::Error> {
-    let mut meta = File::create(dest)?;
-    Ok(param_bag.write_xdmf(offsets, h5_file_name, &mut meta)?)
+    let mut meta = File::create(opts.output.with_extension("xdmf"))?;
+    Ok(param_bag.write_xdmf(offsets, h5_file_name, &mut meta, opts.xdmf_export_arrays)?)
 }
 
 #[paw::main]
@@ -220,7 +224,7 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
             param_bag.add_field("input_geometry", voxelized_mesh);
         }
 
-        param_bag.add_field("infill_geometry", voxelized_field);
+        param_bag.add_field("output_geometry", voxelized_field);
     }
 
     let h5_file_name = opts.output.file_name().unwrap().to_string_lossy();
@@ -230,7 +234,7 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
         offsets,
         &param_bag,
         &h5_file_name,
-        &opts.output.with_extension("xdmf"),
+        &opts
     )?;
 
     // Write HDF5

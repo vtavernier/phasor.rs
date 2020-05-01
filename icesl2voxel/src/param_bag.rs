@@ -281,6 +281,7 @@ impl ParamBag {
         offsets: [f32; 3],
         h5_file_name: &str,
         dest: &mut dyn std::io::Write,
+        export_arrays: bool,
     ) -> std::io::Result<()> {
         let offsets = nalgebra::Vector3::from(offsets);
 
@@ -410,89 +411,91 @@ impl ParamBag {
         // Size of the smallest field
         let box_size = nalgebra::Vector3::from(all_fields[0].1.field_box_mm.size());
 
-        // Write array params
-        let mut arrays: Vec<_> = self.param_arrays.iter().collect();
-        arrays.sort_by_key(|(_, array)| array.len());
+        if export_arrays {
+            // Write array params
+            let mut arrays: Vec<_> = self.param_arrays.iter().collect();
+            arrays.sort_by_key(|(_, array)| array.len());
 
-        for (len, arrays) in &arrays.iter().group_by(|(_, array)| array.len()) {
-            let mut scale = None;
+            for (len, arrays) in &arrays.iter().group_by(|(_, array)| array.len()) {
+                let mut scale = None;
 
-            for (name, array) in arrays {
-                let path = format!("/arrays/{}", name);
+                for (name, array) in arrays {
+                    let path = format!("/arrays/{}", name);
 
-                if scale.is_none() {
-                    let array_x_scale = box_size.x / 1.0;
-                    let array_y_scale = box_size.y / 1.0;
-                    let array_z_scale = box_size.z / len as f32;
+                    if scale.is_none() {
+                        let array_x_scale = box_size.x / 1.0;
+                        let array_y_scale = box_size.y / 1.0;
+                        let array_z_scale = box_size.z / len as f32;
 
-                    writeln!(
-                        dest,
-                        "      <Grid Name=\"array{len:03}_mesh\" GridType=\"Uniform\">",
-                        len = len,
-                    )?;
-                    writeln!(dest, "        <Topology Name=\"array{len:03}_topo\" TopologyType=\"3DCoRectMesh\" NumberOfElements=\"{z} {y} {x}\" />",
-                        x = 1 + 1,
-                        y = 1 + 1,
-                        z = len + 1,
-                        len = len,
-                    )?;
-                    writeln!(
-                        dest,
-                        "        <Geometry Name=\"array{len:03}_geo\" Type=\"ORIGIN_DXDYDZ\">",
-                        len = len,
-                    )?;
+                        writeln!(
+                            dest,
+                            "      <Grid Name=\"array{len:03}_mesh\" GridType=\"Uniform\">",
+                            len = len,
+                        )?;
+                        writeln!(dest, "        <Topology Name=\"array{len:03}_topo\" TopologyType=\"3DCoRectMesh\" NumberOfElements=\"{z} {y} {x}\" />",
+                            x = 1 + 1,
+                            y = 1 + 1,
+                            z = len + 1,
+                            len = len,
+                        )?;
+                        writeln!(
+                            dest,
+                            "        <Geometry Name=\"array{len:03}_geo\" Type=\"ORIGIN_DXDYDZ\">",
+                            len = len,
+                        )?;
 
-                    // TODO: Write this in HDF
-                    writeln!(dest, "          <DataItem Format=\"XML\" Dimensions=\"3\">")?;
-                    writeln!(
-                        dest,
-                        "            {z} {y} {x}",
-                        x = offsets.x + box_size.x / -2.0,
-                        y = offsets.y + box_size.y / -2.0,
-                        z = offsets.z + box_size.z / -2.0,
-                    )?;
-                    writeln!(dest, "          </DataItem>")?;
-                    // TODO: Write this in HDF
-                    writeln!(dest, "          <DataItem Format=\"XML\" Dimensions=\"3\">")?;
-                    writeln!(
-                        dest,
-                        "            {z} {y} {x}",
-                        x = array_x_scale,
-                        y = array_y_scale,
-                        z = array_z_scale,
-                    )?;
-                    writeln!(dest, "          </DataItem>")?;
-                    writeln!(dest, "        </Geometry>")?;
+                        // TODO: Write this in HDF
+                        writeln!(dest, "          <DataItem Format=\"XML\" Dimensions=\"3\">")?;
+                        writeln!(
+                            dest,
+                            "            {z} {y} {x}",
+                            x = offsets.x + box_size.x / -2.0,
+                            y = offsets.y + box_size.y / -2.0,
+                            z = offsets.z + box_size.z / -2.0,
+                        )?;
+                        writeln!(dest, "          </DataItem>")?;
+                        // TODO: Write this in HDF
+                        writeln!(dest, "          <DataItem Format=\"XML\" Dimensions=\"3\">")?;
+                        writeln!(
+                            dest,
+                            "            {z} {y} {x}",
+                            x = array_x_scale,
+                            y = array_y_scale,
+                            z = array_z_scale,
+                        )?;
+                        writeln!(dest, "          </DataItem>")?;
+                        writeln!(dest, "        </Geometry>")?;
 
-                    scale = Some((array_x_scale, array_y_scale, array_z_scale));
+                        scale = Some((array_x_scale, array_y_scale, array_z_scale));
+                    }
+
+                    let mut xdmf_type = array.xdmf_type();
+
+                    if *name != "infill_theta" {
+                        xdmf_type = None;
+                    }
+
+                    if let Some((data_type, precision)) = xdmf_type {
+                        writeln!(
+                            dest,
+                            "        <Attribute Name=\"{name}\" AttributeType=\"Scalar\" Center=\"Cell\">",
+                            name = name,
+                        )?;
+                        writeln!(dest, "          <DataItem Dimensions=\"{z} {y} {x}\" Format=\"HDF5\" DataType=\"{data_type}\" Precision=\"{precision}\">",
+                            x = 1,
+                            y = 1,
+                            z = array.len(),
+                            data_type = data_type,
+                            precision = precision,
+                        )?;
+                        writeln!(dest, "            {}:{}", h5_file_name, path)?;
+                        writeln!(dest, "          </DataItem>")?;
+                        writeln!(dest, "        </Attribute>")?;
+                    }
                 }
 
-                let mut xdmf_type = array.xdmf_type();
-
-                if *name != "infill_theta" {
-                    xdmf_type = None;
-                }
-
-                if let Some((data_type, precision)) = xdmf_type {
-                    writeln!(
-                        dest,
-                        "        <Attribute Name=\"{name}\" AttributeType=\"Scalar\" Center=\"Cell\">",
-                        name = name,
-                    )?;
-                    writeln!(dest, "          <DataItem Dimensions=\"{z} {y} {x}\" Format=\"HDF5\" DataType=\"{data_type}\" Precision=\"{precision}\">",
-                        x = 1,
-                        y = 1,
-                        z = array.len(),
-                        data_type = data_type,
-                        precision = precision,
-                    )?;
-                    writeln!(dest, "            {}:{}", h5_file_name, path)?;
-                    writeln!(dest, "          </DataItem>")?;
-                    writeln!(dest, "        </Attribute>")?;
-                }
+                writeln!(dest, "      </Grid>")?;
             }
-
-            writeln!(dest, "      </Grid>")?;
         }
 
         writeln!(dest, "    </Grid>")?;
