@@ -6,7 +6,7 @@ use glutin::{Context, ContextBuilder, PossiblyCurrent};
 
 use tinygl::prelude::*;
 
-use super::{OptimizationMode, Params, State, shared::Kernel};
+use super::{shared::Kernel, OptimizationMode, Params, State};
 
 enum ApiContext {
     Unintialized,
@@ -38,7 +38,7 @@ impl ApiState {
         EventLoop::new()
     }
 
-    fn new() -> Result<Self, String> {
+    fn new() -> tinygl::Result<Self> {
         let el = Self::get_event_loop();
 
         let sz = glutin::dpi::PhysicalSize::new(512, 512);
@@ -64,11 +64,8 @@ impl ApiState {
         };
 
         // Build an empty VAO for quad rendering
-        let _vao = unsafe {
-            let vao_name = gl.create_vertex_array()?;
-            gl.bind_vertex_array(Some(vao_name));
-            vao_name
-        };
+        let vao = tinygl::wrappers::VertexArray::new(&gl)?;
+        vao.bind(&gl);
 
         let state = State::new(&gl)?;
 

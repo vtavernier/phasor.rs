@@ -2,8 +2,6 @@ use super::{shaders, shared};
 
 use std::rc::Rc;
 
-use tinygl::prelude::*;
-
 const DEFAULT_BANDWIDTH: f32 = 1.692568750643269; // 3.0 / sqrt(M_PI)
 
 #[repr(C)]

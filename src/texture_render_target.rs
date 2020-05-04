@@ -16,7 +16,7 @@ impl TextureRenderTarget {
         gl: &Rc<tinygl::Context>,
         width: u32,
         height: u32,
-    ) -> Result<TextureRenderTarget, String> {
+    ) -> tinygl::Result<TextureRenderTarget> {
         // Create objects
         let mut this = Self {
             framebuffer: GlHandle::new(gl, tinygl::wrappers::Framebuffer::new(gl)?),

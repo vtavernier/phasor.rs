@@ -13,6 +13,7 @@ log = "0.4.8"
 glutin = "0.23.0"
 env_logger = "0.7.1"
 bytesize = "1.0.0"
+cgmath = "0.17.0"
 
 [build-dependencies]
 bindgen = "0.53.1"

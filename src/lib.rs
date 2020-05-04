@@ -28,7 +28,7 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(gl: &Rc<tinygl::Context>) -> Result<Self, String> {
+    pub fn new(gl: &Rc<tinygl::Context>) -> tinygl::Result<Self> {
         // Build demo state
         let mut state = Self {
             display_program: GlHandle::new(gl, shaders::DisplayProgram::build(&gl)?),
@@ -41,9 +41,7 @@ impl State {
         };
 
         // Initialize grid
-        state
-            .check_grid(gl, &Params::default())
-            .map_err(|err| format!("OpenGL error: {}", err))?;
+        state.check_grid(gl, &Params::default())?;
 
         // Setup texture for buffer storage
         unsafe {
@@ -252,7 +250,7 @@ impl State {
         }
     }
 
-    fn check_grid(&mut self, gl: &Rc<tinygl::Context>, params: &Params) -> Result<(), u32> {
+    fn check_grid(&mut self, gl: &Rc<tinygl::Context>, params: &Params) -> tinygl::Result<()> {
         let new_alloc_size = std::mem::size_of::<shared::Kernel>()
             * (params.grid_size.x * params.grid_size.y * params.grid_size.z) as usize
             * params.kernel_count as usize;
@@ -275,13 +273,12 @@ impl State {
                 );
 
                 // Check allocation errors
-                let error = gl.get_error();
+                let error = gl.check_last_error();
 
                 gl.bind_buffer(tinygl::gl::TEXTURE_BUFFER, None);
 
-                if error != tinygl::gl::NO_ERROR {
-                    return Err(error);
-                }
+                // If there's an error, allocation was not successful
+                error?;
             }
 
             // Updated allocated size
