@@ -230,6 +230,13 @@ impl ParamField {
         }
     }
 
+    pub fn as_u8(&self) -> Option<&ndarray::Array3<u8>> {
+        match &self.field {
+            FieldStorage::Byte(array) => Some(array),
+            _ => None,
+        }
+    }
+
     pub fn derive_vec3_from_field(&self, data: ndarray::Array4<f32>) -> Self {
         Self {
             field: FieldStorage::Vec3(data),

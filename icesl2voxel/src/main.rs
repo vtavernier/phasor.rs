@@ -21,17 +21,17 @@ use std::time::Instant;
 
 use structopt::StructOpt;
 
-pub struct DirectionField {
+pub struct FieldMap {
     output_name: String,
     coords: Vec<String>,
 }
 
-impl std::str::FromStr for DirectionField {
+impl std::str::FromStr for FieldMap {
     type Err = failure::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let kv_parts: Vec<_> = s.splitn(2, '=').collect();
-        let coord_parts: Vec<_> = kv_parts[1].splitn(2, ',').map(str::to_owned).collect();
+        let coord_parts: Vec<_> = kv_parts[1].split(',').map(str::to_owned).collect();
 
         Ok(Self {
             output_name: kv_parts[0].to_owned(),
@@ -60,7 +60,7 @@ struct Opts {
 
     /// List of fields to assemble as spherical vector fields
     #[structopt(long)]
-    assemble_spherical: Vec<DirectionField>,
+    assemble_spherical: Vec<FieldMap>,
 
     /// Gcode to extract extruded segments from
     #[structopt(short, long)]
@@ -77,6 +77,10 @@ struct Opts {
     /// Export arrays in XDMF
     #[structopt(long)]
     xdmf_export_arrays: bool,
+
+    /// Compute output geometry statistics
+    #[structopt(long, default_value = "output_stats=10")]
+    output_statistics: Vec<FieldMap>,
 }
 
 impl Opts {
@@ -102,6 +106,7 @@ mod param_array;
 mod param_bag;
 mod param_field;
 mod parse;
+mod stats;
 mod utils;
 mod voxelizer;
 
@@ -220,6 +225,29 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
                 "voxelized input geometry in {:.2}ms",
                 start.elapsed().as_millis()
             );
+
+            for out_spec in &opts.output_statistics {
+                let start = Instant::now();
+
+                let stats_field = stats::compute_output_stats(
+                    &voxelized_field,
+                    &voxelized_mesh,
+                    out_spec
+                        .coords
+                        .iter()
+                        .next()
+                        .ok_or_else(|| failure::err_msg("you need to specify the kernel size"))
+                        .and_then(|f| f.parse::<f32>().map_err(|e| e.into()))?,
+                )?;
+
+                debug!(
+                    "computed {} statistics in {:.2}ms",
+                    out_spec.output_name,
+                    start.elapsed().as_millis()
+                );
+
+                param_bag.add_field(&out_spec.output_name, stats_field);
+            }
 
             param_bag.add_field("input_geometry", voxelized_mesh);
         }
