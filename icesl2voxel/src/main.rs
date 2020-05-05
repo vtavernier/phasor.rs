@@ -229,7 +229,7 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
             for out_spec in &opts.output_statistics {
                 let start = Instant::now();
 
-                let stats_field = stats::compute_output_stats(
+                let (mean_field, m2_field) = stats::compute_output_stats(
                     &voxelized_field,
                     &voxelized_mesh,
                     out_spec
@@ -246,7 +246,8 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
                     start.elapsed().as_millis()
                 );
 
-                param_bag.add_field(&out_spec.output_name, stats_field);
+                param_bag.add_field(&format!("{}_mean", out_spec.output_name), mean_field);
+                param_bag.add_field(&format!("{}_m2", out_spec.output_name), m2_field);
             }
 
             param_bag.add_field("input_geometry", voxelized_mesh);

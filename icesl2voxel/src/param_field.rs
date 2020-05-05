@@ -125,6 +125,15 @@ impl ParamField {
         }
     }
 
+    pub fn new_vec3(field_box_mm: BoundingBox<f32>, storage: ndarray::Array4<f32>) -> Self {
+        assert!(storage.dim().3 == 3);
+
+        Self {
+            field_box_mm,
+            field: FieldStorage::Vec3(storage),
+        }
+    }
+
     pub fn from_attr(
         attributes: &[xml::attribute::OwnedAttribute],
     ) -> Result<Self, failure::Error> {
