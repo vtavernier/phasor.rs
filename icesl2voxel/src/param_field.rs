@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+use ndarray::par_azip;
 use ndarray::prelude::*;
 use serde_derive::{Deserialize, Serialize};
 
@@ -277,5 +278,114 @@ impl ParamField {
             field: FieldStorage::Float(data),
             ..*self
         })
+    }
+
+    pub fn resample(&self, mask: &ParamField) -> Self {
+        use nalgebra::Vector3;
+
+        debug!("input field bounding box: {:?}", self.field_box_mm);
+        debug!("mask field bounding box: {:?}", mask.field_box_mm);
+
+        let im = mask.as_u8().expect("invalid input mask type");
+
+        let out_scale = mask.field_box_mm.size().component_div(&Vector3::new(
+            im.dim().2 as f32,
+            im.dim().1 as f32,
+            im.dim().0 as f32,
+        ));
+
+        let in_scale = self.field_box_mm.size().component_div(&Vector3::new(
+            self.dim().2 as f32,
+            self.dim().1 as f32,
+            self.dim().0 as f32,
+        ));
+
+        match &self.field {
+            FieldStorage::ByteVec4(array) => {
+                let mut out = ndarray::Array3::<u8>::zeros(im.dim());
+
+                par_azip!((index (k, j, i), d in &mut out, m in im) {
+                    // Convert output coordinates into point in input array
+                    let p = Vector3::new(i as f32 + 0.5, j as f32 + 0.5, k as f32 + 0.5); // Float array coordinates
+                    let p = p.component_mul(&out_scale); // mm coordinates
+                    let p = p.component_div(&in_scale); // input coordinates
+
+                    // Tri-linear interpolation
+                    let px1 = (p.x.floor() as isize).max(0).min((array.dim().2 - 1) as isize) as usize;
+                    let py1 = (p.y.floor() as isize).max(0).min((array.dim().1 - 1) as isize) as usize;
+                    let pz1 = (p.z.floor() as isize).max(0).min((array.dim().0 - 1) as isize) as usize;
+                    let px2 = (p.x.ceil() as isize).max(0).min((array.dim().2 - 1) as isize) as usize;
+                    let py2 = (p.y.ceil() as isize).max(0).min((array.dim().1 - 1) as isize) as usize;
+                    let pz2 = (p.z.ceil() as isize).max(0).min((array.dim().0 - 1) as isize) as usize;
+                    let ax = p.x.fract();
+                    let ay = p.y.fract();
+                    let az = p.z.fract();
+
+                    let c00 = array[(pz1, py1, px1, 0)] as f32 * (1.0 - ax) + array[(pz1, py1, px2, 0)] as f32 * ax;
+                    let c01 = array[(pz2, py1, px1, 0)] as f32 * (1.0 - ax) + array[(pz2, py1, px2, 0)] as f32 * ax;
+                    let c10 = array[(pz1, py2, px1, 0)] as f32 * (1.0 - ax) + array[(pz1, py2, px2, 0)] as f32 * ax;
+                    let c11 = array[(pz2, py2, px1, 0)] as f32 * (1.0 - ax) + array[(pz1, py2, px2, 0)] as f32 * ax;
+
+                    let c0 = c00 * (1.0 - ay) + c10 * ay;
+                    let c1 = c01 * (1.0 - ay) + c11 * ay;
+
+                    *d = (*m as f32 / 255.0 * (c0 * (1.0 - az) + c1 * az)) as u8;
+                });
+
+                ParamField::new_u8(mask.field_box_mm, out)
+            }
+            FieldStorage::Vec3(array) => {
+                let mut out =
+                    ndarray::Array4::<f32>::zeros((im.dim().0, im.dim().1, im.dim().2, 3));
+
+                par_azip!((index (k, j, i), mut d in out.lanes_mut(Axis(3)), m in im) {
+                    // Convert output coordinates into point in input array
+                    let p = Vector3::new(i as f32 + 0.5, j as f32 + 0.5, k as f32 + 0.5); // Float array coordinates
+                    let p = p.component_mul(&out_scale); // mm coordinates
+                    let p = p.component_div(&in_scale); // input coordinates
+
+                    // Tri-linear interpolation
+                    let px1 = (p.x.floor() as isize).max(0).min((array.dim().2 - 1) as isize) as usize;
+                    let py1 = (p.y.floor() as isize).max(0).min((array.dim().1 - 1) as isize) as usize;
+                    let pz1 = (p.z.floor() as isize).max(0).min((array.dim().0 - 1) as isize) as usize;
+                    let px2 = (p.x.ceil() as isize).max(0).min((array.dim().2 - 1) as isize) as usize;
+                    let py2 = (p.y.ceil() as isize).max(0).min((array.dim().1 - 1) as isize) as usize;
+                    let pz2 = (p.z.ceil() as isize).max(0).min((array.dim().0 - 1) as isize) as usize;
+                    let ax = p.x.fract();
+                    let ay = p.y.fract();
+                    let az = p.z.fract();
+
+                    let c000: Vector3<f32> = nalgebra::convert(Vector3::from_row_slice(array.slice(s![pz1, py1, px1, ..]).as_slice().unwrap()));
+                    let c001: Vector3<f32> = nalgebra::convert(Vector3::from_row_slice(array.slice(s![pz2, py1, px1, ..]).as_slice().unwrap()));
+                    let c010: Vector3<f32> = nalgebra::convert(Vector3::from_row_slice(array.slice(s![pz1, py2, px1, ..]).as_slice().unwrap()));
+                    let c011: Vector3<f32> = nalgebra::convert(Vector3::from_row_slice(array.slice(s![pz2, py2, px1, ..]).as_slice().unwrap()));
+                    let c100: Vector3<f32> = nalgebra::convert(Vector3::from_row_slice(array.slice(s![pz1, py1, px2, ..]).as_slice().unwrap()));
+                    let c101: Vector3<f32> = nalgebra::convert(Vector3::from_row_slice(array.slice(s![pz2, py1, px2, ..]).as_slice().unwrap()));
+                    let c110: Vector3<f32> = nalgebra::convert(Vector3::from_row_slice(array.slice(s![pz1, py2, px2, ..]).as_slice().unwrap()));
+                    let c111: Vector3<f32> = nalgebra::convert(Vector3::from_row_slice(array.slice(s![pz2, py2, px2, ..]).as_slice().unwrap()));
+
+                    let c00 = c000 * (1.0 - ax) + c100 * ax;
+                    let c01 = c001 * (1.0 - ax) + c101 * ax;
+                    let c10 = c010 * (1.0 - ax) + c110 * ax;
+                    let c11 = c011 * (1.0 - ax) + c111 * ax;
+
+                    let c0 = c00 * (1.0 - ay) + c10 * ay;
+                    let c1 = c01 * (1.0 - ay) + c11 * ay;
+
+                    // Normalize because we only resample direction vectors
+                    let c = *m as f32 / 255.0 * (c0 * (1.0 - az) + c1 * az).normalize();
+
+                    d[0] = c.x;
+                    d[1] = c.y;
+                    d[2] = c.z;
+                });
+
+                Self {
+                    field_box_mm: mask.field_box_mm,
+                    field: FieldStorage::Vec3(out),
+                }
+            }
+            _ => panic!("unsupported field storage type for resampling"),
+        }
     }
 }

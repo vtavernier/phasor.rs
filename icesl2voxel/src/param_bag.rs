@@ -113,8 +113,8 @@ impl ParamBag {
         }
     }
 
-    pub fn is_field(&self, name: &str) -> bool {
-        self.param_fields.contains_key(name)
+    pub fn get_field(&self, name: &str) -> Option<&ParamField> {
+        self.param_fields.get(name)
     }
 
     pub fn assemble_spherical(

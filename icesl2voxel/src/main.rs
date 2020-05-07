@@ -91,6 +91,15 @@ struct Opts {
         value_delimiter = ":"
     )]
     output_statistics: Vec<FieldMap>,
+
+    /// Resample input fields using nearest interpolation and the input geometry mask
+    #[structopt(
+        long,
+        default_value = "input_percentage=infill_percentage:input_dir=infill_dir",
+        use_delimiter = true,
+        value_delimiter = ":"
+    )]
+    resample_fields: Vec<FieldMap>,
 }
 
 impl Opts {
@@ -157,7 +166,7 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
     };
 
     for force_field in &opts.get_force_field() {
-        if param_bag.is_field(force_field) {
+        if param_bag.get_field(force_field).is_some() {
             // Nothing to do
         } else {
             let start = Instant::now();
@@ -235,6 +244,24 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
                 "voxelized input geometry in {:.2}ms",
                 start.elapsed().as_millis()
             );
+
+            for input_spec in &opts.resample_fields {
+                if let Some(field) = param_bag.get_field(&input_spec.coords[0]) {
+                    let start = Instant::now();
+
+                    let field = field.resample(&voxelized_mesh);
+                    debug!(
+                        "resampled {} as {} in {:.2}ms",
+                        input_spec.coords[0],
+                        input_spec.output_name,
+                        start.elapsed().as_millis()
+                    );
+
+                    param_bag.add_field(&input_spec.output_name, field);
+                } else {
+                    error!("field {} not found for resampling", input_spec.coords[0]);
+                }
+            }
 
             for out_spec in &opts.output_statistics {
                 let start = Instant::now();
