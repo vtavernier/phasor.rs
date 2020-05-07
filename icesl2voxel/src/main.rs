@@ -59,7 +59,7 @@ struct Opts {
     force_field: Vec<String>,
 
     /// List of fields to assemble as spherical vector fields
-    #[structopt(long)]
+    #[structopt(long, default_value = "infill_dir=infill_theta,infill_phi", use_delimiter = true)]
     assemble_spherical: Vec<FieldMap>,
 
     /// Gcode to extract extruded segments from
@@ -79,7 +79,7 @@ struct Opts {
     xdmf_export_arrays: bool,
 
     /// Compute output geometry statistics
-    #[structopt(long, default_value = "output_stats=10")]
+    #[structopt(long, default_value = "output_stats=10", use_delimiter = true)]
     output_statistics: Vec<FieldMap>,
 }
 
