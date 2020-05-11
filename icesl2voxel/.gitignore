@@ -8,3 +8,5 @@
 *.xml
 target/
 *.png
+*.pvsm
+*.git
