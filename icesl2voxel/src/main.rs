@@ -100,6 +100,10 @@ struct Opts {
         value_delimiter = ":"
     )]
     resample_fields: Vec<FieldMap>,
+
+    /// Sampling factor in the XY plane for output voxelization
+    #[structopt(long, default_value = "1.0")]
+    xy_sampling_factor: f32,
 }
 
 impl Opts {
@@ -223,7 +227,8 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
     if let Some(gcode_path) = &opts.gcode {
         let start = Instant::now();
 
-        let voxelized_field = voxelizer::voxelize_gcode(gcode_path, opts.samples.into())?;
+        let voxelized_field =
+            voxelizer::voxelize_gcode(gcode_path, opts.samples.into(), opts.xy_sampling_factor)?;
 
         debug!(
             "voxelized printed geometry in {:.2}ms",

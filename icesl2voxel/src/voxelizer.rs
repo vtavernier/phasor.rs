@@ -38,7 +38,11 @@ lazy_static! {
     static ref PARAMETER_REGEX: Regex = Regex::new(r"^; ([a-z0-9_]*) :\s*(.*)$").unwrap();
 }
 
-pub fn voxelize_gcode(path: &Path, samples: usize) -> Result<ParamField, failure::Error> {
+pub fn voxelize_gcode(
+    path: &Path,
+    samples: usize,
+    xy_sampling_factor: f32,
+) -> Result<ParamField, failure::Error> {
     // Parse gcode
     let gcode_src = std::fs::read_to_string(path)?;
     let mut gcode_lines = gcode_src.lines().enumerate();
@@ -185,8 +189,9 @@ pub fn voxelize_gcode(path: &Path, samples: usize) -> Result<ParamField, failure
 
     // One cell per layer
     let zc = current_layer;
-    let xc = zc;
-    let yc = zc;
+    let xc = ((bbox_size.x / bbox_size.z) * zc as f32 * xy_sampling_factor).ceil() as usize;
+    let yc = ((bbox_size.y / bbox_size.z) * zc as f32 * xy_sampling_factor).ceil() as usize;
+    debug!("computed optimal voxel grid size: {}x{}x{}", xc, yc, zc);
 
     let c = nalgebra::Vector3::new(xc as f32, yc as f32, zc as f32);
 
