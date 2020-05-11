@@ -13,6 +13,10 @@ used to compute output statistics and correlation with input fields.
 
     cargo run --release -- -i file.xml -o file.h5 -m file.stl -g file.gcode
 
+    # Compute correlation statistics (Julia required, install dependencies with `julia -e 'import Pkg; Pkg.activate("."); Pkg.instantiate())'`)
+
+    ./stats.jl file.h5
+
 ### Author
 
 Vincent Tavernier <vince.tavernier@gmail.com>
