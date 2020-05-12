@@ -601,7 +601,7 @@ pub fn voxelize_mesh(
     let (zplus, zminus) = {
         debug!("rendering Z axis depth");
 
-        let trans = nalgebra::Matrix4::identity();
+        let trans = nalgebra::Matrix4::new_translation(&-center);
 
         render_axis(
             mesh_bbox,
@@ -620,8 +620,7 @@ pub fn voxelize_mesh(
     }
 
     let get_tran = |rot: nalgebra::Matrix4<f32>| {
-        nalgebra::Matrix4::new_translation(&center)
-            * rot
+            rot
             * nalgebra::Matrix4::new_translation(&-center)
     };
 
