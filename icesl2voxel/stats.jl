@@ -12,9 +12,11 @@ for input in ARGS
   h5open(input, "r") do h5
     input_percentage = h5["/fields/input_percentage/data"]
     output_stats_mean = h5["/fields/output_stats_mean/data"]
+    input_mask = h5["/fields/input_geometry/data"]
 
     # Compute input density -> average material density correlation
-    density_correlation = cor(input_percentage[:,:,:][:], output_stats_mean[:,:,:][:])
+    mask = input_mask[:,:,:] .== 255
+    density_correlation = cor(input_percentage[:,:,:][mask], output_stats_mean[:,:,:][mask])
 
     @printf("%s: density correlation: %g\n", input, density_correlation)
   end
