@@ -135,6 +135,13 @@ impl ParamField {
         }
     }
 
+    pub fn new_f32(field_box_mm: BoundingBox<f32>, storage: ndarray::Array3<f32>) -> Self {
+        Self {
+            field_box_mm,
+            field: FieldStorage::Float(storage),
+        }
+    }
+
     pub fn from_attr(
         attributes: &[xml::attribute::OwnedAttribute],
     ) -> Result<Self, failure::Error> {
@@ -243,6 +250,13 @@ impl ParamField {
     pub fn as_u8(&self) -> Option<&ndarray::Array3<u8>> {
         match &self.field {
             FieldStorage::Byte(array) => Some(array),
+            _ => None,
+        }
+    }
+
+    pub fn as_vec3(&self) -> Option<&ndarray::Array4<f32>> {
+        match &self.field {
+            FieldStorage::Vec3(array) => Some(array),
             _ => None,
         }
     }

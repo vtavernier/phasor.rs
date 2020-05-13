@@ -104,6 +104,10 @@ struct Opts {
     /// Sampling factor in the XY plane for output voxelization
     #[structopt(long, default_value = "1.0")]
     xy_sampling_factor: f32,
+
+    /// Number of rays to sample directions in output geometry
+    #[structopt(long, default_value = "32")]
+    dir_samples: usize,
 }
 
 impl Opts {
@@ -271,15 +275,17 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
             for out_spec in &opts.output_statistics {
                 let start = Instant::now();
 
-                let (mean_field, m2_field) = stats::compute_output_stats(
+                let output_stats = stats::compute_output_stats(
                     &voxelized_field,
                     &voxelized_mesh,
+                    param_bag.get_field("input_dir"),
                     out_spec
                         .coords
                         .iter()
                         .next()
                         .ok_or_else(|| failure::err_msg("you need to specify the kernel size"))
                         .and_then(|f| f.parse::<f32>().map_err(|e| e.into()))?,
+                    opts.dir_samples,
                 )?;
 
                 debug!(
@@ -288,8 +294,13 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
                     start.elapsed().as_millis()
                 );
 
-                param_bag.add_field(&format!("{}_mean", out_spec.output_name), mean_field);
-                param_bag.add_field(&format!("{}_m2", out_spec.output_name), m2_field);
+                param_bag.add_field(&format!("{}_mean", out_spec.output_name), output_stats.mean_field);
+                param_bag.add_field(&format!("{}_dir", out_spec.output_name), output_stats.dir_field);
+                param_bag.add_field(&format!("{}_dir_length", out_spec.output_name), output_stats.dir_length_field);
+                param_bag.add_field(&format!("{}_dir_change", out_spec.output_name), output_stats.dir_change_field);
+                if let Some(dir_correlation) = output_stats.dir_correlation {
+                    param_bag.add_field(&format!("{}_dir_correlation", out_spec.output_name), dir_correlation);
+                }
             }
 
             param_bag.add_field("input_geometry", voxelized_mesh);

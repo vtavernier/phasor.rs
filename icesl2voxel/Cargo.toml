@@ -30,6 +30,9 @@ rand = { version = "0.7", default-features = false, features = [ "small_rng" ] }
 tinygl = { git = "https://github.com/vtavernier/tinygl.git" }
 glutin = "0.24"
 image = "0.23"
+halton = "0.2"
+pbr = "1.0"
+line_drawing = "0.8"
 
 [build-dependencies]
 tinygl-compiler = { git = "https://github.com/vtavernier/tinygl.git" }
