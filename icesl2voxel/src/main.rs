@@ -157,9 +157,11 @@ fn write_xdmf(
 
 #[paw::main]
 fn main(opts: Opts) -> Result<(), failure::Error> {
-    env_logger::Builder::from_default_env()
-        .format_timestamp(None)
-        .init();
+    env_logger::Builder::from_env(
+        env_logger::Env::new().default_filter_or("icesl2voxel=debug,opengl=debug"),
+    )
+    .format_timestamp(None)
+    .init();
 
     let mut param_bag = {
         let start = Instant::now();
