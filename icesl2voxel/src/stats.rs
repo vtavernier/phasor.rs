@@ -1,6 +1,6 @@
 use ndarray::par_azip;
 use ndarray::prelude::*;
-use rand::{Rng, SeedableRng};
+//use rand::{Rng, SeedableRng};
 
 use super::param_field::ParamField;
 
@@ -116,14 +116,15 @@ pub fn compute_output_stats(
     };
 
     let find_max_direction = |k: usize, j: usize, i: usize| {
-        let mut seed = (k * dim.1 * dim.2 + j * dim.2 + i) as u32;
-        seed = ((seed >> 16) ^ seed).wrapping_mul(0x45d9f3bu32);
-        seed = ((seed >> 16) ^ seed).wrapping_mul(0x45d9f3bu32);
-        seed = (seed >> 16) ^ seed;
+        // Commented: uniform sampling for direction instead of Halton sequence
+        //let mut seed = (k * dim.1 * dim.2 + j * dim.2 + i) as u32;
+        //seed = ((seed >> 16) ^ seed).wrapping_mul(0x45d9f3bu32);
+        //seed = ((seed >> 16) ^ seed).wrapping_mul(0x45d9f3bu32);
+        //seed = (seed >> 16) ^ seed;
 
-        //let mut rtheta = halton::Sequence::new(2);
-        //let mut rphi = halton::Sequence::new(3);
-        let mut rng = rand::rngs::SmallRng::seed_from_u64(seed as u64);
+        let mut rtheta = halton::Sequence::new(2);
+        let mut rphi = halton::Sequence::new(3);
+        //let mut rng = rand::rngs::SmallRng::seed_from_u64(seed as u64);
 
         let mut max_dir = nalgebra::Vector3::new(0.0, 0.0, 0.0);
         let mut max_val = 0.0;
@@ -149,10 +150,10 @@ pub fn compute_output_stats(
             }
 
             for k in 0..(dir_samples.max(dirs.len()) - dirs.len()) {
-                //let theta = rtheta.next().unwrap() * std::f64::consts::FRAC_2_PI;
-                //let phi = rphi.next().unwrap() * std::f64::consts::PI;
-                let theta = rng.gen_range(-std::f32::consts::PI, std::f32::consts::PI);
-                let phi = rng.gen_range(-std::f32::consts::PI, std::f32::consts::PI);
+                let theta = rtheta.next().unwrap() * 2.0 * std::f64::consts::PI;
+                let phi = rphi.next().unwrap() * std::f64::consts::PI;
+                //let theta = rng.gen_range(-std::f32::consts::PI, std::f32::consts::PI);
+                //let phi = rng.gen_range(-std::f32::consts::PI, std::f32::consts::PI);
 
                 let dir = nalgebra::Vector3::new(
                     phi.cos() * -theta.sin(),
