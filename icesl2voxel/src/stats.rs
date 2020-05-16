@@ -6,6 +6,7 @@ use super::param_field::ParamField;
 
 pub struct OutputStats {
     pub mean_field: ParamField,
+    pub mean_field_confidence: ParamField,
     pub dir_field: ParamField,
     pub dir_length_field: ParamField,
     pub dir_change_field: ParamField,
@@ -30,12 +31,12 @@ pub fn compute_output_stats(
         dim.1 as f32 / size.y,
         dim.0 as f32 / size.z,
     );
+
+    let kernel_size_mm = kernel_size_mm / 2.0;
     let kernel_offset_mm = nalgebra::Vector3::new(kernel_size_mm, kernel_size_mm, kernel_size_mm);
 
-    debug!(
-        "kernel size in cells: {:?}",
-        2. * kernel_offset_mm.component_mul(&scale)
-    );
+    let cell_count = 2. * kernel_offset_mm.component_mul(&scale);
+    debug!("kernel size in cells: {:?}", cell_count);
 
     // Coordinate transform
     let transform = |k: usize, j: usize, i: usize| {
@@ -48,8 +49,8 @@ pub fn compute_output_stats(
         let z_max = kernel_max.z.floor().min((dim.0 - 1) as f32).max(0.) as usize;
         let y_min = kernel_min.y.ceil().min((dim.1 - 1) as f32).max(0.) as usize;
         let y_max = kernel_max.y.floor().min((dim.1 - 1) as f32).max(0.) as usize;
-        let x_min = kernel_min.y.ceil().min((dim.2 - 1) as f32).max(0.) as usize;
-        let x_max = kernel_max.y.floor().min((dim.2 - 1) as f32).max(0.) as usize;
+        let x_min = kernel_min.x.ceil().min((dim.2 - 1) as f32).max(0.) as usize;
+        let x_max = kernel_max.x.floor().min((dim.2 - 1) as f32).max(0.) as usize;
 
         (
             nalgebra::Vector3::new(x_min, y_min, z_min),
@@ -57,7 +58,6 @@ pub fn compute_output_stats(
         )
     };
 
-    let mut mean_field = ndarray::Array3::<u8>::zeros(dim);
     let mut dir_field = ndarray::Array4::<f32>::zeros((dim.0, dim.1, dim.2, 3));
     let mut dir_length_field = ndarray::Array3::<f32>::zeros(dim);
     let mut dir_change_field = ndarray::Array3::<f32>::zeros(dim);
@@ -70,23 +70,6 @@ pub fn compute_output_stats(
             nalgebra::convert(nalgebra::Vector3::new(i, j, k));
         let start_point = start_point.add_scalar(0.5).component_div(&scale);
 
-        /*
-        let untransform = |v: nalgebra::Vector3<f32>| {
-            let idx = v.component_mul(&scale).add_scalar(-0.5);
-            let idx = (idx.z.floor(), idx.y.floor(), idx.x.floor());
-
-            let clamped = (
-                idx.0.min((dim.0 - 1) as f32).max(0.),
-                idx.1.min((dim.1 - 1) as f32).max(0.),
-                idx.2.min((dim.2 - 1) as f32).max(0.),
-            );
-
-            (
-                idx.0 != clamped.0 || idx.1 != clamped.1 || idx.2 != clamped.2,
-                (clamped.0 as isize, clamped.1 as isize, clamped.2 as isize),
-            )
-        };
-        */
         let untransform = |v: nalgebra::Vector3<f32>| {
             let idx = v.component_mul(&scale).add_scalar(-0.5);
             let idx = (idx.z.floor(), idx.y.floor(), idx.x.floor());
@@ -191,93 +174,50 @@ pub fn compute_output_stats(
         (max_dir, max_val, last_change)
     };
 
-    let steps = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    let total = dim.2 * dim.1 * dim.0;
+    // Raytrace direction
+    if dir_samples > 0 {
+        let steps = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let total = dim.2 * dim.1 * dim.0;
 
-    let thd = std::thread::spawn({
-        let steps = steps.clone();
-        let dir_samples = dir_samples as u64 + 1;
-        move || {
-            let mut pb = pbr::ProgressBar::new(dir_samples * total as u64);
-            let mut last = 0;
+        let thd = std::thread::spawn({
+            let steps = steps.clone();
+            let dir_samples = dir_samples as u64;
+            move || {
+                let mut pb = pbr::ProgressBar::new(dir_samples * total as u64);
+                pb.message("raytracing direction: ");
+                let mut last = 0;
 
-            while last != total {
-                let q = steps.load(std::sync::atomic::Ordering::Relaxed);
-                pb.add((q - last) as u64 * dir_samples);
-                last = q;
-                std::thread::sleep(std::time::Duration::from_millis(50));
+                while last != total {
+                    let q = steps.load(std::sync::atomic::Ordering::Relaxed);
+                    pb.add((q - last) as u64 * dir_samples);
+                    last = q;
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+
+                pb.finish();
+            }
+        });
+
+        par_azip!((index (k, j, i),
+                mut ddir in dir_field.lanes_mut(Axis(3)),
+                ddl in &mut dir_length_field,
+                ddch in &mut dir_change_field,
+                m in im) {
+            if *m > 0 {
+                let (max_dir, max_val, last_change) = find_max_direction(k, j, i);
+                ddir[0] = max_dir.x;
+                ddir[1] = max_dir.y;
+                ddir[2] = max_dir.z;
+
+                *ddl = max_val;
+                *ddch = last_change;
             }
 
-            pb.finish();
-        }
-    });
+            steps.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        });
 
-    par_azip!((index (k, j, i),
-            ds in &mut mean_field,
-            mut ddir in dir_field.lanes_mut(Axis(3)),
-            ddl in &mut dir_length_field,
-            ddch in &mut dir_change_field,
-            m in im) {
-        let (min, max) = transform(k, j, i);
-
-        let mut mean = 0.0f32;
-        let mut sum = 0.0f32;
-
-        for z in min.z..=max.z {
-            if z == k { continue; }
-
-            let m = im[(z, j, i)] as f32 / 255.0;
-            let v = vx[(z, j, i)] as f32 / 255.0;
-
-            mean += m * v;
-            sum += m;
-        }
-
-        for y in min.y..=max.y {
-            if y == j { continue; }
-
-            let m = im[(k, y, i)] as f32 / 255.0;
-            let v = vx[(k, y, i)] as f32 / 255.0;
-
-            mean += m * v;
-            sum += m;
-        }
-
-        for x in min.x..=max.x {
-            if x == i { continue; }
-
-            let m = im[(k, j, x)] as f32 / 255.0;
-            let v = vx[(k, j, x)] as f32 / 255.0;
-
-            mean += m * v;
-            sum += m;
-        }
-
-        let m = *m as f32 / 255.0;
-
-        if m > 0.0 {
-            let v = vx[(k, j, i)] as f32 / 255.0;
-
-            mean += m * v;
-            sum += m;
-        }
-
-        if sum > 0.0 {
-            *ds = (m * mean / sum * 255.0) as u8;
-
-            let (max_dir, max_val, last_change) = find_max_direction(k, j, i);
-            ddir[0] = max_dir.x;
-            ddir[1] = max_dir.y;
-            ddir[2] = max_dir.z;
-
-            *ddl = max_val;
-            *ddch = last_change;
-        }
-
-        steps.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    });
-
-    thd.join().unwrap();
+        thd.join().unwrap();
+    }
 
     let dir_correlation = if let Some(input_dir) = input_dir {
         let input_dir = input_dir.as_vec3().unwrap();
@@ -291,13 +231,118 @@ pub fn compute_output_stats(
                     + in_dir[2] * out_dir[2]).abs() * 255.0) as u8;
         });
 
-        Some(ParamField::new_u8(voxelized_field.field_box_mm, dir_correlation))
+        Some(ParamField::new_u8(
+            voxelized_field.field_box_mm,
+            dir_correlation,
+        ))
     } else {
         None
     };
 
+    let mut mean_field_a = ndarray::Array3::<f32>::zeros(dim);
+    let mut mean_field_b = ndarray::Array3::<f32>::zeros(dim);
+    let mut mean_field_confidence_f = ndarray::Array3::<f32>::ones(dim);
+
+    let gauss = |x: usize, i: usize, s: f32| {
+        let sigma = kernel_size_mm;
+        (-0.5 * ((x as f32 - i as f32) / (s * sigma)).powf(2.0)).exp()
+    };
+
+    // Seed A buffer with input
+    par_azip!((o in &mut mean_field_a, i in vx, m in im) {
+        *o = *i as f32 / 255.0 * *m as f32 / 255.0;
+    });
+
+    {
+        let src = &mean_field_a;
+        let dst = &mut mean_field_b;
+
+        par_azip!((index (k, j, i),
+                o in dst,
+                c in &mut mean_field_confidence_f) {
+            let (min, max) = transform(k, j, i);
+
+            let mut mean = 0.0f32;
+            let mut sum = 0.0f32;
+            let mut count = 0.0f32;
+
+            for z in min.z..=max.z {
+                let w = gauss(z, k, scale.z);
+                mean += src[(z, j, i)] * w;
+                sum += w;
+                count += if im[(z, j, i)] > 0 { 1.0 } else { 0.0 };
+            }
+
+            *o = mean / sum;
+            *c *= count;
+        });
+    }
+
+    {
+        let src = &mean_field_b;
+        let dst = &mut mean_field_a;
+
+        par_azip!((index (k, j, i),
+                o in dst,
+                c in &mut mean_field_confidence_f) {
+            let (min, max) = transform(k, j, i);
+
+            let mut mean = 0.0f32;
+            let mut sum = 0.0f32;
+            let mut count = 0.0f32;
+
+            for y in min.y..=max.y {
+                let w = gauss(y, j, scale.y);
+                mean += src[(k, y, i)] * w;
+                sum += w;
+                count += if im[(k, y, i)] > 0 { 1.0 } else { 0.0 };
+            }
+
+            *o = mean / sum;
+            *c *= count;
+        });
+    }
+
+    {
+        let src = &mean_field_a;
+        let dst = &mut mean_field_b;
+
+        par_azip!((index (k, j, i),
+                o in dst,
+                c in &mut mean_field_confidence_f) {
+            let (min, max) = transform(k, j, i);
+
+            let mut mean = 0.0f32;
+            let mut sum = 0.0f32;
+            let mut count = 0.0f32;
+
+            for x in min.x..=max.x {
+                let w = gauss(x, i, scale.x);
+                mean += src[(k, j, x)] * w;
+                sum += w;
+                count += if im[(k, j, x)] > 0 { 1.0 } else { 0.0 };
+            }
+
+            *o = mean / sum;
+            *c *= count;
+        });
+    }
+
+    let mut mean_field = ndarray::Array3::<u8>::zeros(dim);
+    let mut mean_field_confidence = ndarray::Array3::<u8>::zeros(dim);
+
+    par_azip!((o in &mut mean_field, i in &mean_field_b, ic in &mean_field_confidence_f, oc in &mut mean_field_confidence, m in im) {
+        let m = (*m as f32) / 255.0;
+        *o = (m * *i * 255.0).max(0.0).min(255.0) as u8;
+        *oc = (m * *ic * 255.0 / (cell_count.x * cell_count.y * cell_count.z)).max(0.0).min(255.0) as u8;
+    });
+
     Ok(OutputStats {
         mean_field: ParamField::new_u8(voxelized_field.field_box_mm, mean_field),
+        mean_field_confidence: ParamField::new_u8(
+            voxelized_field.field_box_mm,
+            mean_field_confidence,
+        ),
         dir_field: ParamField::new_vec3(voxelized_field.field_box_mm, dir_field),
         dir_length_field: ParamField::new_f32(voxelized_field.field_box_mm, dir_length_field),
         dir_change_field: ParamField::new_f32(voxelized_field.field_box_mm, dir_change_field),

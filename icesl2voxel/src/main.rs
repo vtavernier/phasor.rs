@@ -294,12 +294,31 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
                     start.elapsed().as_millis()
                 );
 
-                param_bag.add_field(&format!("{}_mean", out_spec.output_name), output_stats.mean_field);
-                param_bag.add_field(&format!("{}_dir", out_spec.output_name), output_stats.dir_field);
-                param_bag.add_field(&format!("{}_dir_length", out_spec.output_name), output_stats.dir_length_field);
-                param_bag.add_field(&format!("{}_dir_change", out_spec.output_name), output_stats.dir_change_field);
+                param_bag.add_field(
+                    &format!("{}_mean", out_spec.output_name),
+                    output_stats.mean_field,
+                );
+                param_bag.add_field(
+                    &format!("{}_mean_confidence", out_spec.output_name),
+                    output_stats.mean_field_confidence,
+                );
+                param_bag.add_field(
+                    &format!("{}_dir", out_spec.output_name),
+                    output_stats.dir_field,
+                );
+                param_bag.add_field(
+                    &format!("{}_dir_length", out_spec.output_name),
+                    output_stats.dir_length_field,
+                );
+                param_bag.add_field(
+                    &format!("{}_dir_change", out_spec.output_name),
+                    output_stats.dir_change_field,
+                );
                 if let Some(dir_correlation) = output_stats.dir_correlation {
-                    param_bag.add_field(&format!("{}_dir_correlation", out_spec.output_name), dir_correlation);
+                    param_bag.add_field(
+                        &format!("{}_dir_correlation", out_spec.output_name),
+                        dir_correlation,
+                    );
                 }
             }
 

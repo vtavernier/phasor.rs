@@ -619,10 +619,7 @@ pub fn voxelize_mesh(
         write_depth_img(&zminus, "zminus.png")?;
     }
 
-    let get_tran = |rot: nalgebra::Matrix4<f32>| {
-            rot
-            * nalgebra::Matrix4::new_translation(&-center)
-    };
+    let get_tran = |rot: nalgebra::Matrix4<f32>| rot * nalgebra::Matrix4::new_translation(&-center);
 
     // Render Y axis
     let (yplus, yminus) = {
