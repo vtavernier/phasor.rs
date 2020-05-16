@@ -33,6 +33,7 @@ image = "0.23"
 halton = "0.2"
 pbr = "1.0"
 line_drawing = "0.8"
+ndarray-stats = "0.3"
 
 [build-dependencies]
 tinygl-compiler = { git = "https://github.com/vtavernier/tinygl.git" }

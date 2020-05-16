@@ -1,5 +1,6 @@
 use ndarray::par_azip;
 use ndarray::prelude::*;
+use ndarray_stats::QuantileExt;
 //use rand::{Rng, SeedableRng};
 
 use super::param_field::ParamField;
@@ -271,7 +272,7 @@ pub fn compute_output_stats(
                 let w = gauss(z, k, scale.z);
                 mean += src[(z, j, i)] * w;
                 sum += w;
-                count += if im[(z, j, i)] > 0 { 1.0 } else { 0.0 };
+                count += if im[(z, j, i)] > 0 { w } else { 0.0 };
             }
 
             *o = mean / sum;
@@ -296,7 +297,7 @@ pub fn compute_output_stats(
                 let w = gauss(y, j, scale.y);
                 mean += src[(k, y, i)] * w;
                 sum += w;
-                count += if im[(k, y, i)] > 0 { 1.0 } else { 0.0 };
+                count += if im[(k, y, i)] > 0 { w } else { 0.0 };
             }
 
             *o = mean / sum;
@@ -321,7 +322,7 @@ pub fn compute_output_stats(
                 let w = gauss(x, i, scale.x);
                 mean += src[(k, j, x)] * w;
                 sum += w;
-                count += if im[(k, j, x)] > 0 { 1.0 } else { 0.0 };
+                count += if im[(k, j, x)] > 0 { w } else { 0.0 };
             }
 
             *o = mean / sum;
@@ -332,10 +333,14 @@ pub fn compute_output_stats(
     let mut mean_field = ndarray::Array3::<u8>::zeros(dim);
     let mut mean_field_confidence = ndarray::Array3::<u8>::zeros(dim);
 
+    let count_max = mean_field_confidence_f
+        .max()
+        .expect("failed to compute maximum field confidence value");
+
     par_azip!((o in &mut mean_field, i in &mean_field_b, ic in &mean_field_confidence_f, oc in &mut mean_field_confidence, m in im) {
         let m = (*m as f32) / 255.0;
         *o = (m * *i * 255.0).max(0.0).min(255.0) as u8;
-        *oc = (m * *ic * 255.0 / (cell_count.x * cell_count.y * cell_count.z)).max(0.0).min(255.0) as u8;
+        *oc = (m * *ic * 255.0 / count_max).max(0.0).min(255.0) as u8;
     });
 
     Ok(OutputStats {
