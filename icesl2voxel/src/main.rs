@@ -95,7 +95,7 @@ struct Opts {
     /// Resample input fields using nearest interpolation and the input geometry mask
     #[structopt(
         long,
-        default_value = "input_percentage=infill_percentage:input_dir=infill_dir",
+        default_value = "input_percentage=infill_percentage:input_dir=infill_dir:input_isotropy=infill_isotropy",
         use_delimiter = true,
         value_delimiter = ":"
     )]
