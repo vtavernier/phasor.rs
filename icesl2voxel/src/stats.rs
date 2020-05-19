@@ -1,6 +1,5 @@
 use ndarray::par_azip;
 use ndarray::prelude::*;
-use ndarray_stats::QuantileExt;
 //use rand::{Rng, SeedableRng};
 
 use super::param_field::ParamField;
@@ -223,17 +222,17 @@ pub fn compute_output_stats(
 
     let dir_correlation = if let Some(input_dir) = input_dir {
         let input_dir = input_dir.as_vec3().unwrap();
-        let mut dir_correlation = ndarray::Array3::<u8>::zeros(dim);
+        let mut dir_correlation = ndarray::Array3::<f32>::zeros(dim);
 
         par_azip!((ddc in &mut dir_correlation,
             in_dir in input_dir.lanes(Axis(3)),
             out_dir in dir_field.lanes(Axis(3))) {
-            *ddc = ((in_dir[0] * out_dir[0]
-                    + in_dir[1] * out_dir[1]
-                    + in_dir[2] * out_dir[2]).abs() * 255.0) as u8;
+            *ddc = (in_dir[0] * out_dir[0]
+                   + in_dir[1] * out_dir[1]
+                   + in_dir[2] * out_dir[2]).abs();
         });
 
-        Some(ParamField::new_u8(
+        Some(ParamField::new_f32(
             voxelized_field.field_box_mm,
             dir_correlation,
         ))
@@ -330,22 +329,18 @@ pub fn compute_output_stats(
         });
     }
 
-    let mut mean_field = ndarray::Array3::<u8>::zeros(dim);
-    let mut mean_field_confidence = ndarray::Array3::<u8>::zeros(dim);
+    let mean_field = &mut mean_field_a;
+    let mut mean_field_confidence = ndarray::Array3::<f32>::zeros(dim);
 
-    let count_max = mean_field_confidence_f
-        .max()
-        .expect("failed to compute maximum field confidence value");
-
-    par_azip!((o in &mut mean_field, i in &mean_field_b, ic in &mean_field_confidence_f, oc in &mut mean_field_confidence, m in im) {
+    par_azip!((o in mean_field, i in &mean_field_b, ic in &mean_field_confidence_f, oc in &mut mean_field_confidence, m in im) {
         let m = (*m as f32) / 255.0;
-        *o = (m * *i * 255.0).max(0.0).min(255.0) as u8;
-        *oc = (m * *ic * 255.0 / count_max).max(0.0).min(255.0) as u8;
+        *o = m * *i;
+        *oc = m * *ic;
     });
 
     Ok(OutputStats {
-        mean_field: ParamField::new_u8(voxelized_field.field_box_mm, mean_field),
-        mean_field_confidence: ParamField::new_u8(
+        mean_field: ParamField::new_f32(voxelized_field.field_box_mm, mean_field_a),
+        mean_field_confidence: ParamField::new_f32(
             voxelized_field.field_box_mm,
             mean_field_confidence,
         ),
