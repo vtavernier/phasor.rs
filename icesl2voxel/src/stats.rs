@@ -150,7 +150,7 @@ pub fn compute_output_stats(
                 }
             }
 
-            for k in 0..(dir_samples.max(dirs.len()) - dirs.len()) {
+            for _ in 0..(dir_samples.max(dirs.len()) - dirs.len()) {
                 let theta = rtheta.next().unwrap() * 2.0 * std::f64::consts::PI;
                 let phi = rphi.next().unwrap() * std::f64::consts::PI;
                 //let theta = rng.gen_range(-std::f32::consts::PI, std::f32::consts::PI);
