@@ -8,4 +8,4 @@ pkg/
 wasm-pack.log
 phasoropt.h
 vendor/
-*.tar
+*.tar*
