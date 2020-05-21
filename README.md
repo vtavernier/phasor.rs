@@ -36,10 +36,6 @@ cinst rustup.install visualstudio2019community visualstudio2019-workload-vctools
 Then, in a terminal:
 
 ```bash
-# Get the source
-git clone https://github.com/vtavernier/phasor.rs.git
-cd phasor.rs
-
 # Build and launch the test executable
 cargo run
 ```
