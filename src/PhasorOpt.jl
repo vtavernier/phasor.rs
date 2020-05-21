@@ -1,3 +1,11 @@
+"""
+    PhasorOpt
+
+Main module for the interface to the Phasor noise optimizer used
+to generate microstructures.
+
+See the `framex` method documentation for more details
+"""
 module PhasorOpt
 
 # Load binary dependency
@@ -16,10 +24,77 @@ function __init__()
 end
 
 # Actual Julia PhasorOpt interface
+"""
+    init()
+
+Initialize the optimizer state. Doesn't need to be called directly as framex
+ensures initialization before running.
+"""
 init() = pg_init(true)
+
+"""
+    terminate()
+
+Free resources used by the optimizer. Only needed for manual reset of the
+optimizer state.
+"""
 terminate() = pg_terminate()
+
+"""
+    get_max_kernels()
+
+Return the maximum number of kernels per optimization cells the optimizer
+supports. This method is used to check what is the upper bound on the number of
+kernels that was compiled in the native code and shaders.
+"""
 get_max_kernels() = pg_get_max_kernels()
 
+"""
+    framex(width; [iterations = 20, [seed = 2304, ...]])
+
+Compute a 2D instance of optimized Phasor noise.
+
+# Parameters
+
+* `width` (required): width of the generated example in pixels
+* `kernel_count` (default: 8): number of noise kernels per optimization cell
+* `iterations` (default: 0): number of optimization iterations
+* `seed` (default: 1): random seed for noise generation
+* `height` (default: width): height of the generated example in pixels
+* `angle_mode` (default: `AM_GAUSS`): type of orientation field to generate
+* `angle` (default: 0.0): base angle for the orientation field, see `fields.glsl` for details on how this is used
+* `angle_bandwidth` (default: 0.1): for `AM_GAUSS`, bandwidth of the Gaussian orientation field
+* `angle_range` (default: pi): range of orientation variation in the orientation field
+* `frequency_mode` (default: `FM_STATIC`): type of frequency field to generate
+* `frequency` (default: 64.0): base frequency for the frequency field, see `fields.glsl` for details on how this is used
+* `frequency_max` (default: 128.0): for `FM_GAUSS`, maximum frequency in the frequency field
+* `frequency_bandwidth` (default: 0.1): for `FM_GAUSS`, bandwidth of the Gaussian frequency field
+* `noise_bandwidth` (default: 3.0 / sqrt(pi)): bandwidth of the noise kernels
+* `filter_bandwidth` (default: 0.0): bandwidth of the filtering kernel
+* `filter_modulation` (default: 4.0): linear factor of the filter attenuation (resp. to orientation)
+* `filter_modpower` (default: 1.0): power of the attenuation factor (resp. to orientation)
+* `isotropy_mode` (default: IM_ANISOTROPIC): type of isotropy field to generate
+* `isotropy_min` (default: 0.0): minimum isotropy amount
+* `isotropy_max` (default: 1.0): maximum isotropy amount
+* `isotropy_bandwidth` (default: 0.1): for `IM_GAUSS`, bandwidth of the Gaussian isotropy field
+* `isotropy_modulation` (default: 2.0): linear factor of the filter attenuation (resp. to isotropy)
+* `isotropy_power` (default: 4.0): power of the attenuation factor (resp. to isotropy)
+* `cell_mode` (default: `CM_CLAMP`): behavior at boundary of cells
+* `opt_method` (default: `OM_OPTIMIZE`): optimization strategy
+* `export_extra` (default: false): export extra fields in the result
+* `init_kernels` (default: true): initialize kernels before optimization. This
+    can be set to false to iteratively optimize the same noise instance over.
+
+# Returns
+
+A tuple containing, in order:
+* Complex Phasor noise
+* Generated orientation map
+* Generated frequency map
+* Generated isotropy map
+* (if `export_extra` is `true`) Generated attenuation factor
+* (if `export_extra` is `true`) Internal state value (see display.frag for details)
+"""
 function framex(width;
                 kernel_count = 8,
                 iterations = 0,
@@ -113,14 +188,29 @@ function framex(width;
   end
 end
 
+"""
+    kernel_width(width, bandwidth, filter_bandwidth)
+
+Return the width in pixels of the noise kernel given its bandwidth and the filtering bandwidth.
+"""
 function kernel_width(width, bandwidth, filter_bandwidth)
   pg_noise_kernel_width(width, bandwidth, filter_bandwidth)
 end
 
+"""
+    kernel_width(width, bandwidth)
+
+Return the width in pixels of the noise kernel given its bandwidth and no filter.
+"""
 function kernel_width(width, bandwidth)
   pg_gauss_kernel_width(width, bandwidth)
 end
 
+"""
+    get_error()
+
+Return the last error that occurred in the optimizer.
+"""
 function get_error()
   ptr = pg_get_error()
   if ptr == C_NULL
@@ -130,6 +220,17 @@ function get_error()
   end
 end
 
+"""
+    get_kernels()
+
+Retrieve the kernel data from the GPU. The returned array contains for each kernel:
+* X coordinate
+* Y coordinate
+* Frequency
+* Phase
+* Orientation
+* Internal state value
+"""
 function get_kernels()
   grid_x = Ref{Int32}(0)
   grid_y = Ref{Int32}(0)
@@ -145,6 +246,13 @@ function get_kernels()
   Base.unsafe_wrap(Array, unsafe_ptr, (kernel_count[], grid_x[], grid_y[]))
 end
 
+"""
+    set_kernels(kernels)
+
+Set the kernel data to the given array. You can use `get_kernels()` and change values
+inside the returned array to generate suitable data for this. You can then call
+`framex(d; init_kernels = false)` to render the resulting noise.
+"""
 function set_kernels(kernels::Array{Kernel,3})
   (kernel_count, grid_y, grid_x) = size(kernels)
 
