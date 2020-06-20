@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["pg_gauss_kernel_width",""],["pg_get_error",""],["pg_get_extra",""],["pg_get_kernels",""],["pg_get_max_kernels",""],["pg_init",""],["pg_noise_kernel_width",""],["pg_optimize_ex",""],["pg_set_kernels",""],["pg_terminate",""]]});
