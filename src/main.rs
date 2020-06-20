@@ -1,5 +1,3 @@
-use tinygl::prelude::*;
-
 use std::rc::Rc;
 
 use glutin::event::{ElementState, Event, VirtualKeyCode, WindowEvent};
@@ -40,9 +38,10 @@ fn main() -> Result<(), String> {
 
     // Build and bind an empty VAO
     let _vao = unsafe {
-        let vao_name = gl.create_vertex_array()?;
-        gl.bind_vertex_array(Some(vao_name));
-        vao_name
+        let vao = tinygl::wrappers::VertexArray::new(&*gl)
+            .map_err(|e| format!("failed to create VAO: {}", e))?;
+        vao.bind(&*gl);
+        vao
     };
 
     // Initialize demo

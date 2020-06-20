@@ -1,6 +1,5 @@
 use std::rc::Rc;
 
-use tinygl::prelude::*;
 use tinygl::wrappers::GlHandle;
 
 pub struct TextureRenderTarget {
@@ -33,12 +32,12 @@ impl TextureRenderTarget {
         unsafe {
             for tex in [&this.texture_main, &this.texture_extra].iter() {
                 tex.bind(gl, tinygl::gl::TEXTURE_2D);
-                gl.tex_parameter_i32(
+                gl.tex_parameteri(
                     tinygl::gl::TEXTURE_2D,
                     tinygl::gl::TEXTURE_MIN_FILTER,
                     tinygl::gl::NEAREST as i32,
                 );
-                gl.tex_parameter_i32(
+                gl.tex_parameteri(
                     tinygl::gl::TEXTURE_2D,
                     tinygl::gl::TEXTURE_MAG_FILTER,
                     tinygl::gl::NEAREST as i32,
@@ -51,21 +50,19 @@ impl TextureRenderTarget {
         // Setup bindings
         unsafe {
             this.framebuffer.bind(gl, tinygl::gl::FRAMEBUFFER);
-            this.framebuffer.renderbuffer(
-                gl,
+            gl.framebuffer_renderbuffer(
                 tinygl::gl::FRAMEBUFFER,
                 tinygl::gl::DEPTH_ATTACHMENT,
+                tinygl::gl::RENDERBUFFER,
                 Some(&this.depthbuffer),
             );
-            this.framebuffer.texture(
-                gl,
+            gl.framebuffer_texture(
                 tinygl::gl::FRAMEBUFFER,
                 tinygl::gl::COLOR_ATTACHMENT0,
                 Some(&this.texture_main),
                 0,
             );
-            this.framebuffer.texture(
-                gl,
+            gl.framebuffer_texture(
                 tinygl::gl::FRAMEBUFFER,
                 tinygl::gl::COLOR_ATTACHMENT1,
                 Some(&this.texture_extra),

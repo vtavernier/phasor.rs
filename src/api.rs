@@ -4,8 +4,6 @@ use std::rc::Rc;
 use glutin::event_loop::EventLoop;
 use glutin::{Context, ContextBuilder, PossiblyCurrent};
 
-use tinygl::prelude::*;
-
 use super::{shared::Kernel, OptimizationMode, Params, State};
 
 enum ApiContext {
@@ -65,7 +63,9 @@ impl ApiState {
 
         // Build an empty VAO for quad rendering
         let vao = tinygl::wrappers::VertexArray::new(&gl)?;
-        vao.bind(&gl);
+        unsafe {
+            vao.bind(&gl);
+        }
 
         let state = State::new(&gl)?;
 

@@ -45,10 +45,7 @@ impl State {
 
         // Setup texture for buffer storage
         unsafe {
-            gl.bind_texture(
-                tinygl::gl::TEXTURE_BUFFER,
-                Some(state.kernel_texture.name()),
-            );
+            state.kernel_texture.bind(gl, tinygl::gl::TEXTURE_BUFFER);
             gl.tex_buffer(
                 tinygl::gl::TEXTURE_BUFFER,
                 tinygl::gl::R32F,
@@ -66,14 +63,16 @@ impl State {
             .expect("failed to allocate grid");
 
         // Set params
-        self.init_program.use_program(gl);
+        unsafe {
+            self.init_program.use_program(gl);
+        }
         params.apply_shared(gl, self.init_program.as_ref());
 
         unsafe {
             // Bind kernel data
             gl.bind_image_texture(
                 self.init_program.get_u_kernels_binding(),
-                self.kernel_texture.name(),
+                Some(&self.kernel_texture),
                 0,
                 false,
                 0,
@@ -114,7 +113,9 @@ impl State {
             .expect("failed to allocate grid");
 
         // Run one optimization pass
-        self.opt_program.use_program(gl);
+        unsafe {
+            self.opt_program.use_program(gl);
+        }
         params.apply_global(gl, self.opt_program.as_ref());
         self.opt_program
             .set_u_noise_bandwidth(gl, params.noise_bandwidth);
@@ -125,7 +126,7 @@ impl State {
             // Bind kernel data
             gl.bind_image_texture(
                 self.opt_program.get_u_kernels_binding(),
-                self.kernel_texture.name(),
+                Some(&self.kernel_texture),
                 0,
                 false,
                 0,
@@ -148,7 +149,9 @@ impl State {
         self.check_grid(gl, params)
             .expect("failed to allocate grid");
 
-        self.display_program.use_program(gl);
+        unsafe {
+            self.display_program.use_program(gl);
+        }
         params.apply_shared(gl, self.display_program.as_ref());
         self.display_program
             .set_u_filter_modulation(gl, params.filter_modulation);
@@ -166,7 +169,7 @@ impl State {
             // Bind kernel data
             gl.bind_image_texture(
                 self.display_program.get_u_kernels_binding(),
-                self.kernel_texture.name(),
+                Some(&self.kernel_texture),
                 0,
                 false,
                 0,
@@ -203,10 +206,10 @@ impl State {
 
         trt.alloc(gl, width, height);
 
-        // Set target framebuffer
-        trt.framebuffer.bind(gl, tinygl::gl::FRAMEBUFFER);
-
         unsafe {
+            // Set target framebuffer
+            trt.framebuffer.bind(gl, tinygl::gl::FRAMEBUFFER);
+
             // Set viewport
             gl.viewport(0, 0, width as i32, height as i32);
 
@@ -265,7 +268,7 @@ impl State {
 
             // Setupinitialize buffer storage
             unsafe {
-                gl.bind_buffer(tinygl::gl::TEXTURE_BUFFER, Some(self.kernels.name()));
+                self.kernels.bind(gl, tinygl::gl::TEXTURE_BUFFER);
                 gl.buffer_data_size(
                     tinygl::gl::TEXTURE_BUFFER,
                     new_alloc_size as i32,

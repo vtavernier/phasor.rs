@@ -323,7 +323,6 @@ fn render_axis(
         tinygl::wrappers::Framebuffer::new(&gl)
             .map_err(|emsg| failure::err_msg(format!("failed to create framebuffer: {}", emsg)))?,
     );
-    framebuffer.bind(&gl, gl::FRAMEBUFFER);
 
     // Create framebuffer and depth texture
     let depth_texture = tinygl::wrappers::GlRefHandle::new(
@@ -332,11 +331,13 @@ fn render_axis(
             failure::err_msg(format!("failed to create depth texture: {}", emsg))
         })?,
     );
-    depth_texture.bind(&gl, gl::TEXTURE_2D);
 
     unsafe {
-        gl.tex_parameter_i32(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
-        gl.tex_parameter_i32(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
+        framebuffer.bind(&gl, gl::FRAMEBUFFER);
+        depth_texture.bind(&gl, gl::TEXTURE_2D);
+
+        gl.tex_parameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
+        gl.tex_parameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
 
         gl.tex_image_2d(
             gl::TEXTURE_2D,
@@ -377,30 +378,30 @@ fn render_axis(
         ) * transform,
     );
 
-    framebuffer.texture_2d(
-        &gl,
-        gl::FRAMEBUFFER,
-        gl::DEPTH_ATTACHMENT,
-        gl::TEXTURE_2D,
-        Some(&depth_texture),
-        0,
-    );
-
-    debug!("framebuffer status: {}", unsafe {
-        match gl.check_framebuffer_status(gl::FRAMEBUFFER) {
-            gl::FRAMEBUFFER_INCOMPLETE_ATTACHMENT => {
-                "GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT".to_owned()
-            }
-            gl::FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT => {
-                "GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT".to_owned()
-            }
-            gl::FRAMEBUFFER_UNSUPPORTED => "GL_FRAMEBUFFER_UNSUPPORTED".to_owned(),
-            gl::FRAMEBUFFER_COMPLETE => "GL_FRAMEBUFFER_COMPLETE".to_owned(),
-            other => format!("{}", other),
-        }
-    });
-
     unsafe {
+        gl.framebuffer_texture_2d(
+            gl::FRAMEBUFFER,
+            gl::DEPTH_ATTACHMENT,
+            gl::TEXTURE_2D,
+            Some(&depth_texture),
+            0,
+        );
+
+        debug!(
+            "framebuffer status: {}",
+            match gl.check_framebuffer_status(gl::FRAMEBUFFER) {
+                gl::FRAMEBUFFER_INCOMPLETE_ATTACHMENT => {
+                    "GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT".to_owned()
+                }
+                gl::FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT => {
+                    "GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT".to_owned()
+                }
+                gl::FRAMEBUFFER_UNSUPPORTED => "GL_FRAMEBUFFER_UNSUPPORTED".to_owned(),
+                gl::FRAMEBUFFER_COMPLETE => "GL_FRAMEBUFFER_COMPLETE".to_owned(),
+                other => format!("{}", other),
+            }
+        );
+
         let draw = || {
             // Clear depth
             gl.clear(gl::DEPTH_BUFFER_BIT);
@@ -445,13 +446,13 @@ fn render_axis(
 
         // Draw closest points
         gl.depth_func(gl::LEQUAL);
-        gl.clear_depth_f32(1.0);
+        gl.clear_depth(1.0);
 
         let buf_plus = draw();
 
         // Draw furthest points
         gl.depth_func(gl::GEQUAL);
-        gl.clear_depth_f32(0.0);
+        gl.clear_depth(0.0);
 
         let buf_minus = draw();
 
@@ -509,10 +510,10 @@ pub fn voxelize_mesh(
 
     // VAO
     let _vao = unsafe {
-        let name = gl.create_vertex_array().map_err(|emsg| {
+        let name = tinygl::wrappers::VertexArray::new(&gl).map_err(|emsg| {
             failure::err_msg(format!("failed to create vertex array object: {}", emsg))
         })?;
-        gl.bind_vertex_array(Some(name));
+        name.bind(&gl);
         name
     };
 
@@ -520,8 +521,9 @@ pub fn voxelize_mesh(
     let vertices_buffer = tinygl::wrappers::Buffer::new(&gl)
         .map_err(|_| failure::err_msg("failed to create vertex buffer"))?;
 
-    vertices_buffer.bind(&gl, gl::ARRAY_BUFFER);
     unsafe {
+        vertices_buffer.bind(&gl, gl::ARRAY_BUFFER);
+
         gl.buffer_data_u8_slice(
             gl::ARRAY_BUFFER,
             {
@@ -538,9 +540,11 @@ pub fn voxelize_mesh(
     // Upload mesh indices
     let indices_buffer = tinygl::wrappers::Buffer::new(&gl)
         .map_err(|_| failure::err_msg("failed to create index buffer"))?;
-    indices_buffer.bind(&gl, gl::ELEMENT_ARRAY_BUFFER);
+
     unsafe {
-        let byte_count = (std::mem::size_of::<u32>() * mesh.faces.len() * 3) as i32;
+        indices_buffer.bind(&gl, gl::ELEMENT_ARRAY_BUFFER);
+
+        let byte_count = (std::mem::size_of::<u32>() * mesh.faces.len() * 3) as isize;
 
         // Allocate storage
         gl.buffer_storage(
@@ -571,9 +575,10 @@ pub fn voxelize_mesh(
     // Build display program
     let prog = shaders::MeshProgram::build(&gl)
         .map_err(|emsg| failure::err_msg(format!("failed to build program: {}", emsg)))?;
-    prog.use_program(&gl);
 
     unsafe {
+        prog.use_program(&gl);
+
         // Enable vertex position attribute (vec3)
         gl.enable_vertex_attrib_array(0);
         gl.vertex_attrib_pointer_f32(0, 3, gl::FLOAT, false, 0, 0);
