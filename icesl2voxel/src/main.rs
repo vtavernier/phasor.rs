@@ -108,6 +108,10 @@ struct Opts {
     /// Number of rays to sample directions in output geometry
     #[structopt(long, default_value = "32")]
     dir_samples: usize,
+
+    /// Pad all written fields with a single layer of 0 to generate closed surfaces
+    #[structopt(long)]
+    pad_fields: bool,
 }
 
 impl Opts {
@@ -328,6 +332,10 @@ fn main(opts: Opts) -> Result<(), failure::Error> {
         }
 
         param_bag.add_field("output_geometry", voxelized_field);
+    }
+
+    if opts.pad_fields {
+        param_bag.pad_fields(1);
     }
 
     let h5_file_name = opts.output.file_name().unwrap().to_string_lossy();

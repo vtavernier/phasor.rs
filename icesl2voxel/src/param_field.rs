@@ -15,7 +15,78 @@ enum FieldStorage {
     Vec3(ndarray::Array4<f32>),
 }
 
+fn pad_dim3(mut dim: (usize, usize, usize), one_size_pad: usize) -> (usize, usize, usize) {
+    dim.0 += one_size_pad * 2;
+    dim.1 += one_size_pad * 2;
+    dim.2 += one_size_pad * 2;
+    dim
+}
+
+fn pad_dim4(
+    mut dim: (usize, usize, usize, usize),
+    one_size_pad: usize,
+) -> (usize, usize, usize, usize) {
+    dim.0 += one_size_pad * 2;
+    dim.1 += one_size_pad * 2;
+    dim.2 += one_size_pad * 2;
+    // Don't pad the last dimension, it represents a vecX
+    dim
+}
+
+macro_rules! pad_array {
+    (3, $array:ident, $pad:ident) => {{
+        // Original array dimension
+        let original_dim = $array.dim();
+        // Create a new array of zeros
+        let mut new_array = Array3::zeros(pad_dim3(original_dim, $pad));
+        // Copy original slice into new array
+        new_array
+            .slice_mut(s![
+                $pad..original_dim.0 + $pad,
+                $pad..original_dim.1 + $pad,
+                $pad..original_dim.2 + $pad
+            ])
+            .assign($array);
+        // Assign back
+        *$array = new_array;
+    }};
+    (4, $array:ident, $pad:ident) => {{
+        // Original array dimension
+        let original_dim = $array.dim();
+        // Create a new array of zeros
+        let mut new_array = Array4::zeros(pad_dim4(original_dim, $pad));
+        // Copy original slice into new array
+        new_array
+            .slice_mut(s![
+                $pad..original_dim.0 + $pad,
+                $pad..original_dim.1 + $pad,
+                $pad..original_dim.2 + $pad,
+                ..
+            ])
+            .assign($array);
+        // Assign back
+        *$array = new_array;
+    }};
+}
+
 impl FieldStorage {
+    fn pad(&mut self, one_size_pad: usize) {
+        match self {
+            FieldStorage::Byte(array) => {
+                pad_array!(3, array, one_size_pad);
+            }
+            FieldStorage::ByteVec4(array) => {
+                pad_array!(4, array, one_size_pad);
+            }
+            FieldStorage::Float(array) => {
+                pad_array!(3, array, one_size_pad);
+            }
+            FieldStorage::Vec3(array) => {
+                pad_array!(4, array, one_size_pad);
+            }
+        }
+    }
+
     fn as_u8_slice_mut(&mut self) -> Option<&mut [u8]> {
         match self {
             Self::Byte(array) => array.as_slice_mut(),
@@ -187,6 +258,23 @@ impl ParamField {
 
     pub fn dim(&self) -> (usize, usize, usize, usize) {
         self.field.dim()
+    }
+
+    /// Pad the represented field by `pad` layers on each side. The bouding box will be resized
+    /// accordingly.
+    pub fn pad(&mut self, pad: usize) {
+        // Get previous array dimensions
+        let original_dim = self.dim();
+
+        // Pad storage
+        self.field.pad(pad);
+
+        // Pad bounding box. Arguments are X, Y, Z
+        self.field_box_mm.pad_all(nalgebra::Vector3::new(
+            pad as f32 / original_dim.2 as f32,
+            pad as f32 / original_dim.1 as f32,
+            pad as f32 / original_dim.0 as f32,
+        ));
     }
 
     pub fn write_hdf5(

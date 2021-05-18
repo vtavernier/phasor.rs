@@ -232,6 +232,12 @@ impl ParamBag {
         Ok(())
     }
 
+    pub fn pad_fields(&mut self, pad: usize) {
+        for field in self.param_fields.values_mut() {
+            field.pad(pad);
+        }
+    }
+
     pub fn write_hdf5(&self, file: &hdf5::File) -> Result<(), failure::Error> {
         // Assume all fields share the same grid
         let first_field = self.param_fields.iter().next().unwrap().1;

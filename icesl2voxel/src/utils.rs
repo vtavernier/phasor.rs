@@ -34,6 +34,15 @@ impl<T: num_traits::Num + num_traits::NumCast + std::fmt::Debug + Copy + 'static
     pub fn max(&self) -> nalgebra::Vector3<T> {
         nalgebra::Vector3::new(self.max_x, self.max_y, self.max_z)
     }
+
+    pub fn pad_all(&mut self, padding: nalgebra::Vector3<T>) {
+        self.min_x = self.min_x - padding.x;
+        self.min_y = self.min_y - padding.y;
+        self.min_z = self.min_z - padding.z;
+        self.max_x = self.max_x + padding.x;
+        self.max_y = self.max_y + padding.y;
+        self.max_z = self.max_z + padding.z;
+    }
 }
 
 impl<'a, T, U> From<T> for BoundingBox<U>
