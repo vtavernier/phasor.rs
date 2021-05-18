@@ -231,9 +231,9 @@ dependencies = [
 
 [[package]]
 name = "cmake"
-version = "0.1.42"
+version = "0.1.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81fb25b677f8bf1eb325017cb6bb8452f87969db0fedb4f757b297bee78a7c62"
+checksum = "eb6210b637171dfba4cda12e579ac6dc73f5165ad56133e5d72ef3131f320855"
 dependencies = [
  "cc",
 ]
@@ -1707,9 +1707,9 @@ dependencies = [
 
 [[package]]
 name = "shaderc"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed344938df2d7fa3cc6bfb4af0b578f00f9b389d5fe7be0250fa657c442a8281"
+checksum = "50b8aeaae10b9bda5cba66736a7e265f67698e912e1cc6a4678acba286e22be9"
 dependencies = [
  "libc",
  "shaderc-sys",
@@ -1717,9 +1717,9 @@ dependencies = [
 
 [[package]]
 name = "shaderc-sys"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30075c712b08798cb2b5e54e4434970a4a3a3a3e838b0642590c74605d3cc528"
+checksum = "5b12d7c62d6732884c9dfab587503fa3a795b108df152415a89da23812d4737e"
 dependencies = [
  "cmake",
  "libc",
@@ -1977,6 +1977,7 @@ dependencies = [
 [[package]]
 name = "tinygl"
 version = "0.1.0"
+source = "git+https://github.com/vtavernier/tinygl.git?rev=e68239e#e68239e63e8ec2e05756e1c0c8a52b80aae255fd"
 dependencies = [
  "backtrace",
  "js-sys",
@@ -1989,6 +1990,7 @@ dependencies = [
 [[package]]
 name = "tinygl-compiler"
 version = "0.1.0"
+source = "git+https://github.com/vtavernier/tinygl.git?rev=e68239e#e68239e63e8ec2e05756e1c0c8a52b80aae255fd"
 dependencies = [
  "base64",
  "heck",
